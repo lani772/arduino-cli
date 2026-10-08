@@ -6,8 +6,10 @@ import (
  "log"
  "os"
 
+ "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/infrastructure/arduino"
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/interfaces/httpserver"
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/interfaces/mcp"
+ "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/policy"
 )
 
 const version = "0.1.0"
@@ -19,16 +21,16 @@ func main() {
  logger := log.New(os.Stderr, "", log.LstdFlags)
  switch *transport {
  case "stdio":
-  logger.Printf("version=%s transport=stdio status=ready", version)
-  if err := mcp.NewStdio(os.Stdin, os.Stdout).Start(context.Background()); err != nil {
-   logger.Fatal(err)
-  }
+  server := mcp.NewStdio(os.Stdin, os.Stdout)
+  cli := arduino.NewCLI("arduino-cli", nil, policy.DefaultExecutionPolicy())
+  if err := mcp.RegisterArduinoTools(server.Registry, cli); err != nil { logger.Fatal(err) }
+  if err := mcp.RegisterFirmwareValidationTool(server.Registry); err != nil { logger.Fatal(err) }
+  logger.Printf("version=%s transport=stdio tools=%d status=ready", version, len(server.Registry.List()))
+  if err := server.Start(context.Background()); err != nil { logger.Fatal(err) }
  case "http":
   server := httpserver.New(*address, version, logger)
   logger.Printf("version=%s transport=http status=ready address=%s", version, *address)
-  if err := server.Start(); err != nil {
-   logger.Fatal(err)
-  }
+  if err := server.Start(); err != nil { logger.Fatal(err) }
  default:
   logger.Fatalf("unsupported transport %q; use http or stdio", *transport)
  }
