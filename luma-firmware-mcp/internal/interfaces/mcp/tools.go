@@ -41,21 +41,25 @@ func objectSchema(properties map[string]any,required ...string)map[string]any{
 func RegisterArduinoTools(r *Registry,cli application.ArduinoCLI)error{
  if cli==nil{return fmt.Errorf("Arduino CLI adapter is required")}
  if err:=r.Register(RegisteredTool{Definition:Tool{Name:"arduino_cli_version",Description:"Return the installed Arduino CLI version.",InputSchema:objectSchema(map[string]any{})},Handler:func(ctx context.Context,_ json.RawMessage)(any,error){return cli.Version(ctx)}});err!=nil{return err}
- return r.Register(RegisteredTool{Definition:Tool{Name:"arduino_list_boards",Description:"List boards currently detected by Arduino CLI. This does not flash or modify a device.",InputSchema:objectSchema(map[string]any{})},Handler:func(ctx context.Context,_ json.RawMessage)(any,error){return cli.ListBoards(ctx)}})
+ if err:=r.Register(RegisteredTool{Definition:Tool{Name:"arduino_list_boards",Description:"List boards currently detected by Arduino CLI. This does not flash or modify a device.",InputSchema:objectSchema(map[string]any{})},Handler:func(ctx context.Context,_ json.RawMessage)(any,error){return cli.ListBoards(ctx)}});err!=nil{return err}
+ return r.Register(RegisteredTool{Definition:Tool{Name:"arduino_compile",Description:"Compile an existing Arduino sketch for a specified FQBN. This does not upload or flash a device.",InputSchema:objectSchema(map[string]any{"source_path":map[string]any{"type":"string","description":"Path to an existing sketch directory or source file."},"fqbn":map[string]any{"type":"string","description":"Fully qualified board name, for example esp32:esp32:esp32."}},"source_path","fqbn")},Handler:func(ctx context.Context,raw json.RawMessage)(any,error){
+  var p struct{SourcePath string `json:"source_path"`;FQBN string `json:"fqbn"`}
+  if err:=json.Unmarshal(raw,&p);err!=nil{return nil,fmt.Errorf("invalid compile arguments: %w",err)}
+  if strings.TrimSpace(p.SourcePath)==""||strings.TrimSpace(p.FQBN)==""{return nil,fmt.Errorf("source_path and fqbn are required")}
+  result,err:=cli.Compile(ctx,p.SourcePath,p.FQBN)
+  response:=map[string]any{"build":result}
+  if err!=nil{response["error"]=err.Error()}
+  return response,nil
+ }})
 }
 func RegisterFirmwareValidationTool(r *Registry)error{
  properties:=map[string]any{
-  "project_id":map[string]any{"type":"string"},
-  "microcontroller_name":map[string]any{"type":"string"},
-  "target":map[string]any{"type":"object"},
-  "firmware_version":map[string]any{"type":"string"},
-  "status_gpio":map[string]any{"type":"integer"},
-  "offline_schedules":map[string]any{"type":"boolean"},
-  "mqtt_enabled":map[string]any{"type":"boolean"},
+  "project_id":map[string]any{"type":"string"},"microcontroller_name":map[string]any{"type":"string"},"target":map[string]any{"type":"object"},
+  "firmware_version":map[string]any{"type":"string"},"status_gpio":map[string]any{"type":"integer"},"offline_schedules":map[string]any{"type":"boolean"},"mqtt_enabled":map[string]any{"type":"boolean"},
   "lamps":map[string]any{"type":"array","items":map[string]any{"type":"object","properties":map[string]any{"id":map[string]any{"type":"string"},"name":map[string]any{"type":"string"},"room":map[string]any{"type":"string"},"gpio":map[string]any{"type":"integer"}},"required":[]string{"id","name","gpio"},"additionalProperties":false}},
  }
  schema:=objectSchema(properties,"project_id","microcontroller_name","target","firmware_version","lamps")
- return r.Register(RegisteredTool{Definition:Tool{Name:"luma_validate_firmware_spec",Description:"Validate a proposed LUMA firmware specification and GPIO assignments without generating or flashing firmware.",InputSchema:schema},Handler:func(_ context.Context,raw json.RawMessage)(any,error){
+ return r.Register(RegisteredTool{Definition:Tool{Name:"luma_validate_firmware_spec",Description:"Validate a proposed LUMA firmware specification and its GPIO assignments without generating or flashing firmware.",InputSchema:schema},Handler:func(_ context.Context,raw json.RawMessage)(any,error){
   var spec firmware.Specification
   if err:=json.Unmarshal(raw,&spec);err!=nil{return nil,fmt.Errorf("invalid firmware specification: %w",err)}
   spec=spec.WithDefaults()
