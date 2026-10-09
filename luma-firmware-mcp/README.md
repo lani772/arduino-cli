@@ -18,6 +18,7 @@ Tools:
 - `arduino_cli_version` — installed Arduino CLI version.
 - `arduino_list_boards` — detected board candidates.
 - `arduino_list_serial_devices` — read-only serial port discovery, including unmatched ports.
+- `arduino_verify_device` — read-only verification report with separate port, board-candidate, and optional supplied upload-exit-code statuses; never claims runtime hardware verification.
 - `arduino_compile` — compile an existing sketch.
 - `arduino_upload_firmware` — explicit-port upload tool; requires `confirm_upload=true` and a policy that permits flashing (disabled by default).
 - `luma_validate_firmware_spec` — validate LUMA lamp GPIO/specification input.
@@ -42,3 +43,5 @@ gofmt -w .
 go test ./...
 go vet ./...
 ```
+
+Verification uses read-only serial discovery and does not open ports or reset the device. A successful upload exit code and a matching board candidate are evidence only; `hardware_verified` remains false until a runtime firmware handshake is implemented.
