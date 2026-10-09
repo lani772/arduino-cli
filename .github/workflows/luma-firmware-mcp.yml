@@ -22,12 +22,15 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.23.x"
-      - name: Check handshake package formatting
+      - name: Check Go formatting
         working-directory: luma-firmware-mcp
-        run: test -z "$(gofmt -l internal/domain/handshake)"
+        run: test -z "$(gofmt -l $(find . -name '*.go' -type f))"
       - name: Run module tests
         working-directory: luma-firmware-mcp
         run: go test ./...
+      - name: Run race-enabled module tests
+        working-directory: luma-firmware-mcp
+        run: go test -race ./...
       - name: Run go vet
         working-directory: luma-firmware-mcp
         run: go vet ./...
