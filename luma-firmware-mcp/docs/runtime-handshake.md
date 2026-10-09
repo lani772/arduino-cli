@@ -1,6 +1,6 @@
 # LUMA ESP32 Runtime Handshake — Protocol Design
 
-Status: **design proposal; not implemented**
+Status: **parser and simulated-message unit tests implemented; live serial handshake not implemented**
 
 ## Purpose
 
@@ -58,6 +58,12 @@ Firmware responds with the same challenge and its current identity:
 
 These records are illustrative examples, not existing firmware output. The challenge prevents stale buffered identity responses from being mistaken for a fresh response, but does **not** authenticate the board against an active attacker. A stronger authenticity claim requires a device-bound key and a reviewed challenge-response signature or MAC design.
 
+## Parser behavior implemented
+
+The hardware-independent `internal/domain/handshake` package validates a single identity JSON record against a caller-supplied fresh challenge, checks protocol/version/event, rejects malformed or multi-record input, caps record size at 4096 bytes, bounds required identity fields, and rejects absent or negative uptime. A separate readiness validator confirms a valid `ready` record without treating it as an identity response. Tests use simulated JSON only.
+
+The parser does not generate cryptographic challenges, read serial ports, implement a response deadline, authenticate device identity, or prove that a sample originated from a physical device. A caller must not treat parsed sample data as hardware evidence.
+
 ## Verification levels
 
 | Level | Required evidence | Allowed report |
@@ -65,7 +71,7 @@ These records are illustrative examples, not existing firmware output. The chall
 | `port_detected` | Arduino CLI lists the requested port | Port observed; no identity claim |
 | `board_candidate_matched` | Port record includes the requested FQBN | Candidate match only |
 | `upload_command_succeeded` | Actual upload process exited zero | Upload command succeeded; runtime not proven |
-| `runtime_handshake_received` | Fresh challenge echoed in a valid protocol-v1 identity response | Firmware endpoint responded with the reported identity |
+| `runtime_handshake_received` | Fresh challenge echoed in a valid protocol-v1 identity response received over the selected live transport | Firmware endpoint responded with the reported identity |
 | `device_authenticated` | Runtime response validates against provisioned device-bound cryptographic credentials | Authenticated device identity, subject to key lifecycle/security review |
 
 Do not collapse these levels into one boolean. In particular, `hardware_verified` must remain false for the first three levels. A future implementation may define `runtime_responded=true` after a valid fresh challenge response; it must not set `device_authenticated=true` without cryptographic verification.
@@ -93,7 +99,7 @@ Do not collapse these levels into one boolean. In particular, `hardware_verified
 
 ## Implementation sequence
 
-1. Add a protocol parser and unit tests independent of hardware.
+1. Add a protocol parser and unit tests independent of hardware. **Implemented.**
 2. Add a serial transport behind a separate interface with explicit enablement and consent.
 3. Test using a fake serial transport and simulated firmware records.
 4. Add integration tests with a loopback simulator; test timeout, malformed JSON, stale challenge, mismatch, cancellation, and cleanup.

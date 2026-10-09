@@ -36,6 +36,10 @@ Prompts:
 
 Serial discovery uses `arduino-cli board list --format json` and retains reported port address, label, protocol, and board candidates. Ports with no matching board are still reported; detection does not verify device identity. The tool does not open serial ports or reset devices. Core installation remains disabled. Upload requests are rejected by default because device flashing is disabled in the execution policy; enabling flashing requires an explicit policy change and each tool request must confirm the upload. Compile executes the configured Arduino CLI against the supplied source path, so only trusted paths should be passed. Persistent project storage is not wired into the MCP transport.
 
+## Runtime handshake boundary
+
+The hardware-independent parser in `internal/domain/handshake` validates simulated protocol-v1 JSON records, required identity fields, size limits, and challenge matching. Unit tests use only sample messages. It does not open serial ports, generate challenges, communicate with firmware, authenticate device identity, or set `hardware_verified`. Live transport remains a separate, disabled milestone.
+
 ## Validate
 
 ```bash
@@ -44,4 +48,4 @@ go test ./...
 go vet ./...
 ```
 
-Verification uses read-only serial discovery and does not open ports or reset the device. A successful upload exit code and a matching board candidate are evidence only; `hardware_verified` remains false until a runtime firmware handshake is implemented. The proposed handshake contract is documented in [`docs/runtime-handshake.md`](docs/runtime-handshake.md); it is a design specification, not an implemented serial protocol.
+Verification uses read-only serial discovery and does not open ports or reset the device. A successful upload exit code and a matching board candidate are evidence only; `hardware_verified` remains false until a live runtime handshake is implemented. The protocol contract is documented in [`docs/runtime-handshake.md`](docs/runtime-handshake.md).
