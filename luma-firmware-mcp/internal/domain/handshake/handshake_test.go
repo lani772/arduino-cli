@@ -21,7 +21,7 @@ func TestParseIdentityValidResponse(t *testing.T) {
 func TestParseIdentityRejectsInvalidRecords(t *testing.T) {
 	tests := []struct {
 		name, raw, challenge string
-		want                 error
+		want error
 	}{
 		{"malformed JSON", "{", "fresh-token-123456", nil},
 		{"wrong protocol", strings.Replace(validIdentity, "luma.runtime", "other.runtime", 1), "fresh-token-123456", ErrWrongProtocol},

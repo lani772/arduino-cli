@@ -26,7 +26,6 @@ var (
 	ErrChallengeMismatch = errors.New("identity response challenge does not match")
 )
 
-// Identity is parsed, untrusted protocol data; it is not proof of physical device identity.
 type Identity struct {
 	FirmwareVersion string `json:"firmware_version"`
 	ProjectID       string `json:"project_id"`
@@ -45,13 +44,21 @@ type record struct {
 	UptimeMS        *int64 `json:"uptime_ms"`
 }
 
+func validateExpectedChallenge(challenge string) error {
+	if strings.TrimSpace(challenge) == "" || challenge != strings.TrimSpace(challenge) || len(challenge) > MaxChallengeBytes {
+		return ErrInvalidChallenge
+	}
+	return nil
+}
+
+// ParseIdentity validates a single protocol-v1 identity record. It performs no I/O.
 func ParseIdentity(line []byte, expectedChallenge string) (Identity, error) {
 	var zero Identity
 	if len(line) > MaxRecordBytes {
 		return zero, ErrRecordTooLarge
 	}
-	if strings.TrimSpace(expectedChallenge) == "" || expectedChallenge != strings.TrimSpace(expectedChallenge) || len(expectedChallenge) > MaxChallengeBytes {
-		return zero, ErrInvalidChallenge
+	if err := validateExpectedChallenge(expectedChallenge); err != nil {
+		return zero, err
 	}
 	line = bytes.TrimSuffix(line, []byte("\n"))
 	line = bytes.TrimSuffix(line, []byte("\r"))

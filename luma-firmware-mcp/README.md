@@ -38,7 +38,7 @@ Serial discovery uses `arduino-cli board list --format json` and retains reporte
 
 ## Runtime handshake boundary
 
-The hardware-independent parser in `internal/domain/handshake` validates simulated protocol-v1 JSON records, required identity fields, size limits, and challenge matching. Unit tests use only sample messages. It does not open serial ports, generate challenges, communicate with firmware, authenticate device identity, or set `hardware_verified`. Live transport remains a separate, disabled milestone.
+The hardware-independent `internal/domain/handshake` package validates protocol-v1 JSON records and provides `ReadIdentity` over an injected, context-aware line source. It skips a valid readiness record, enforces a caller-supplied deadline, and rejects malformed responses or challenge mismatches. Tests use fake sources and sample messages only. No real serial source, challenge generation, challenge transmission, cryptographic device authentication, or hardware verification is implemented. A source adapter must honor context cancellation; hardware access remains a separate disabled milestone.
 
 ## Validate
 

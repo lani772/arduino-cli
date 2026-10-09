@@ -1,6 +1,6 @@
 # LUMA ESP32 Runtime Handshake — Protocol Design
 
-Status: **parser and simulated-message unit tests implemented; live serial handshake not implemented**
+Status: **parser and fake-source reader implemented; live serial handshake not implemented**
 
 ## Purpose
 
@@ -11,12 +11,12 @@ Define the minimum evidence needed before a future verifier can report that LUMA
 - Transport: newline-delimited JSON over USB serial, using a future explicitly enabled verifier adapter.
 - Baud rate: 115200 by default; configurable only when both firmware and verifier agree.
 - Firmware emits one JSON object per line and terminates each record with `\n`.
-- The verifier must use a bounded timeout and bounded line size; it must ignore unrelated boot logs and malformed lines.
+- The verifier must use a bounded timeout and bounded line size; it must ignore unrelated boot logs and malformed lines only if that behavior is explicitly designed and tested.
 - No relay/lamp outputs may change as a side effect of a verification request.
 
 ## Protocol version 1
 
-After initialization, firmware may emit a readiness record:
+Firmware may emit a readiness record:
 
 ```json
 {
@@ -30,7 +30,7 @@ After initialization, firmware may emit a readiness record:
 }
 ```
 
-The verifier should then send a fresh challenge:
+The future verifier sends a fresh challenge:
 
 ```json
 {
@@ -58,11 +58,11 @@ Firmware responds with the same challenge and its current identity:
 
 These records are illustrative examples, not existing firmware output. The challenge prevents stale buffered identity responses from being mistaken for a fresh response, but does **not** authenticate the board against an active attacker. A stronger authenticity claim requires a device-bound key and a reviewed challenge-response signature or MAC design.
 
-## Parser behavior implemented
+## Parser and injected-source reader
 
-The hardware-independent `internal/domain/handshake` package validates a single identity JSON record against a caller-supplied fresh challenge, checks protocol/version/event, rejects malformed or multi-record input, caps record size at 4096 bytes, bounds required identity fields, and rejects absent or negative uptime. A separate readiness validator confirms a valid `ready` record without treating it as an identity response. Tests use simulated JSON only.
+The hardware-independent `internal/domain/handshake` package validates a single identity JSON record against a caller-supplied challenge, checks protocol/version/event, rejects malformed or multi-record input, caps record size at 4096 bytes, bounds required identity fields, and rejects absent or negative uptime. The `ReadIdentity` helper consumes a context-aware injected `LineSource`, skips a valid readiness record, and applies a bounded timeout. Fake-source tests cover successful flow, challenge mismatch, caller cancellation, deadline expiration, invalid arguments, and source failure.
 
-The parser does not generate cryptographic challenges, read serial ports, implement a response deadline, authenticate device identity, or prove that a sample originated from a physical device. A caller must not treat parsed sample data as hardware evidence.
+The package does not generate cryptographic challenges, send the challenge to firmware, read serial ports, or authenticate device identity. The line source must honor context cancellation. Parsed data from a sample or fake source is not evidence that a physical device responded.
 
 ## Verification levels
 
@@ -74,7 +74,7 @@ The parser does not generate cryptographic challenges, read serial ports, implem
 | `runtime_handshake_received` | Fresh challenge echoed in a valid protocol-v1 identity response received over the selected live transport | Firmware endpoint responded with the reported identity |
 | `device_authenticated` | Runtime response validates against provisioned device-bound cryptographic credentials | Authenticated device identity, subject to key lifecycle/security review |
 
-Do not collapse these levels into one boolean. In particular, `hardware_verified` must remain false for the first three levels. A future implementation may define `runtime_responded=true` after a valid fresh challenge response; it must not set `device_authenticated=true` without cryptographic verification.
+Do not collapse these levels into one boolean. In particular, `hardware_verified` must remain false for the first three levels. An echoed challenge alone does not establish trusted hardware identity.
 
 ## Required verifier checks
 
@@ -100,11 +100,11 @@ Do not collapse these levels into one boolean. In particular, `hardware_verified
 ## Implementation sequence
 
 1. Add a protocol parser and unit tests independent of hardware. **Implemented.**
-2. Add a serial transport behind a separate interface with explicit enablement and consent.
-3. Test using a fake serial transport and simulated firmware records.
-4. Add integration tests with a loopback simulator; test timeout, malformed JSON, stale challenge, mismatch, cancellation, and cleanup.
+2. Add a context-bounded reader over an injected line-source interface, tested with fake sources. **Implemented.**
+3. Add an actual serial adapter only after timeout, cancellation, malformed input, mismatch, and cleanup tests pass and operator-consent behavior is specified.
+4. Test using a loopback simulator before supervised hardware trials.
 5. Only then run a supervised test on a spare ESP32 with lamp loads disconnected or otherwise made safe.
-6. Keep cryptographic device authentication as a separate milestone; do not equate an echoed challenge with trusted hardware identity.
+6. Keep cryptographic device authentication as a separate milestone.
 
 ## Current implementation boundary
 
