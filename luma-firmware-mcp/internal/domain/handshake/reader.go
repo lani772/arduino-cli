@@ -9,16 +9,17 @@ import (
 
 type LineSource interface {
 	ReadLine(context.Context) ([]byte, error)
+	Close() error
 }
 
 var (
 	ErrInvalidTimeout = errors.New("handshake timeout must be positive")
-	ErrNoLineSource = errors.New("handshake line source is nil")
+	ErrNoLineSource   = errors.New("handshake line source is nil")
 )
 
 // ReadIdentity consumes records from an injected source until it receives a valid
-// identity response or fails. A valid ready record is skipped. This package has
-// no serial adapter and does not authenticate the source.
+// identity response or fails. The source is closed on every return path. This
+// package has no serial adapter and does not authenticate the source.
 func ReadIdentity(ctx context.Context, source LineSource, expectedChallenge string, timeout time.Duration) (Identity, error) {
 	var zero Identity
 	if source == nil {
@@ -30,6 +31,8 @@ func ReadIdentity(ctx context.Context, source LineSource, expectedChallenge stri
 	if err := validateExpectedChallenge(expectedChallenge); err != nil {
 		return zero, err
 	}
+	defer source.Close()
+
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -61,5 +64,5 @@ func ReadIdentity(ctx context.Context, source LineSource, expectedChallenge stri
 
 type readResult struct {
 	identity Identity
-	err error
+	err      error
 }

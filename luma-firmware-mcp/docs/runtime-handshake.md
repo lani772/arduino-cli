@@ -60,9 +60,9 @@ These records are illustrative examples, not existing firmware output. The chall
 
 ## Parser and injected-source reader
 
-The hardware-independent `internal/domain/handshake` package validates a single identity JSON record against a caller-supplied challenge, checks protocol/version/event, rejects malformed or multi-record input, caps record size at 4096 bytes, bounds required identity fields, and rejects absent or negative uptime. The `ReadIdentity` helper consumes a context-aware injected `LineSource`, skips a valid readiness record, and applies a bounded timeout. Fake-source tests cover successful flow, challenge mismatch, caller cancellation, deadline expiration, invalid arguments, and source failure.
+The hardware-independent `internal/domain/handshake` package validates a single identity JSON record against a caller-supplied challenge, checks protocol/version/event, rejects malformed or multi-record input, caps record size at 4096 bytes, bounds required identity fields, and rejects absent or negative uptime. The `ReadIdentity` helper consumes a context-aware injected `LineSource`, skips a valid readiness record, applies a bounded timeout, and closes the source on every read attempt that begins after argument validation. Fake-source tests cover successful flow, challenge mismatch, caller cancellation, deadline expiration, invalid arguments, source failure, and cleanup.
 
-The package does not generate cryptographic challenges, send the challenge to firmware, read serial ports, or authenticate device identity. The line source must honor context cancellation. Parsed data from a sample or fake source is not evidence that a physical device responded.
+A `LineSource` implementation must make `Close` safe to call when a read is blocked and must honor context cancellation; otherwise its underlying goroutine may not stop promptly. The package does not generate cryptographic challenges, send the challenge to firmware, read serial ports, or authenticate device identity. Parsed data from a sample or fake source is not evidence that a physical device responded.
 
 ## Verification levels
 
@@ -101,10 +101,11 @@ Do not collapse these levels into one boolean. In particular, `hardware_verified
 
 1. Add a protocol parser and unit tests independent of hardware. **Implemented.**
 2. Add a context-bounded reader over an injected line-source interface, tested with fake sources. **Implemented.**
-3. Add an actual serial adapter only after timeout, cancellation, malformed input, mismatch, and cleanup tests pass and operator-consent behavior is specified.
-4. Test using a loopback simulator before supervised hardware trials.
-5. Only then run a supervised test on a spare ESP32 with lamp loads disconnected or otherwise made safe.
-6. Keep cryptographic device authentication as a separate milestone.
+3. Test source closure on success, malformed responses, cancellation, timeout, and read errors. **Implemented for success, mismatch, cancellation, timeout, and source error.**
+4. Add an actual serial adapter only after timeout, cancellation, malformed input, mismatch, and cleanup tests pass and operator-consent behavior is specified.
+5. Test using a loopback simulator before supervised hardware trials.
+6. Only then run a supervised test on a spare ESP32 with lamp loads disconnected or otherwise made safe.
+7. Keep cryptographic device authentication as a separate milestone.
 
 ## Current implementation boundary
 
