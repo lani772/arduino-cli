@@ -21,6 +21,7 @@ func main() {
   cli:=arduino.NewCLI("arduino-cli",nil,policy.DefaultExecutionPolicy())
   if err:=mcp.RegisterArduinoTools(server.Registry,cli);err!=nil{logger.Fatal(err)}
   if err:=mcp.RegisterFirmwareValidationTool(server.Registry);err!=nil{logger.Fatal(err)}
+  if err:=mcp.RegisterESP32Tools(server.Registry);err!=nil{logger.Fatal(err)}
   if err:=mcp.RegisterDefaultResources(server.Resources,cli);err!=nil{logger.Fatal(err)}
   if err:=mcp.RegisterDefaultPrompts(server.Prompts);err!=nil{logger.Fatal(err)}
   logger.Printf("version=%s transport=stdio tools=%d resources=%d prompts=%d status=ready",version,len(server.Registry.List()),len(server.Resources.List()),len(server.Prompts.List()))
