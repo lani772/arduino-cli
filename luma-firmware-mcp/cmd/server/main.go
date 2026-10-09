@@ -16,6 +16,7 @@ func main(){
  case "stdio":
   server:=mcp.NewStdio(os.Stdin,os.Stdout);cli:=arduino.NewCLI("arduino-cli",nil,policy.DefaultExecutionPolicy())
   if err:=mcp.RegisterArduinoTools(server.Registry,cli);err!=nil{logger.Fatal(err)}
+  if err:=mcp.RegisterUploadTool(server.Registry,cli);err!=nil{logger.Fatal(err)}
   if err:=mcp.RegisterFirmwareValidationTool(server.Registry);err!=nil{logger.Fatal(err)}
   if err:=mcp.RegisterESP32Tools(server.Registry);err!=nil{logger.Fatal(err)}
   if err:=mcp.RegisterDeviceTools(server.Registry,cli);err!=nil{logger.Fatal(err)}

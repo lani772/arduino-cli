@@ -52,6 +52,27 @@ func RegisterArduinoTools(r *Registry,cli application.ArduinoCLI)error{
   return response,nil
  }})
 }
+func RegisterUploadTool(r *Registry, cli application.ArduinoCLI) error {
+ if cli == nil { return fmt.Errorf("Arduino CLI adapter is required") }
+ return r.Register(RegisteredTool{
+  Definition: Tool{Name:"arduino_upload_firmware",Description:"Upload a compiled sketch to an explicitly selected serial port. Requires confirm_upload=true and an execution policy that permits device flashing; flashing is disabled by default.",InputSchema:objectSchema(map[string]any{
+   "source_path":map[string]any{"type":"string","description":"Path to an existing Arduino sketch."},
+   "fqbn":map[string]any{"type":"string","description":"Exact target board FQBN."},
+   "port":map[string]any{"type":"string","description":"Exact serial port address returned by device discovery."},
+   "confirm_upload":map[string]any{"type":"boolean","description":"Must be true to authorize this upload request."},
+  },"source_path","fqbn","port","confirm_upload")},
+  Handler:func(ctx context.Context,raw json.RawMessage)(any,error){
+   var p struct{SourcePath string `json:"source_path"`;FQBN string `json:"fqbn"`;Port string `json:"port"`;Confirm bool `json:"confirm_upload"`}
+   if err:=json.Unmarshal(raw,&p);err!=nil{return nil,fmt.Errorf("invalid upload arguments: %w",err)}
+   if strings.TrimSpace(p.SourcePath)==""||strings.TrimSpace(p.FQBN)==""||strings.TrimSpace(p.Port)==""{return nil,fmt.Errorf("source_path, fqbn, and port are required")}
+   if !p.Confirm{return nil,fmt.Errorf("upload requires confirm_upload=true")}
+   result,err:=cli.Upload(ctx,p.SourcePath,p.FQBN,p.Port)
+   response:=map[string]any{"upload":result}
+   if err!=nil{response["error"]=err.Error()}
+   return response,nil
+  },
+ })
+}
 func RegisterFirmwareValidationTool(r *Registry)error{
  properties:=map[string]any{
   "project_id":map[string]any{"type":"string"},"microcontroller_name":map[string]any{"type":"string"},"target":map[string]any{"type":"object"},
