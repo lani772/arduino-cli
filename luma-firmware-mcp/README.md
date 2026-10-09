@@ -4,16 +4,9 @@ AI-assisted Arduino/ESP32 firmware engineering service isolated from the Arduino
 
 ## Run
 
-HTTP health endpoint (default):
-
 ```bash
 go run ./cmd/server
 # GET http://localhost:8080/healthz
-```
-
-MCP over stdio (newline-delimited JSON-RPC):
-
-```bash
 go run ./cmd/server -transport stdio
 ```
 
@@ -23,22 +16,23 @@ In stdio mode, stdout is reserved for protocol messages and logs go to stderr.
 
 Tools:
 - `arduino_cli_version` — installed Arduino CLI version.
-- `arduino_list_boards` — board discovery.
+- `arduino_list_boards` — detected board candidates.
+- `arduino_list_serial_devices` — read-only serial port discovery, including unmatched ports.
 - `arduino_compile` — compile only; does not upload firmware.
 - `luma_validate_firmware_spec` — validate LUMA lamp GPIO/specification input.
-- `luma_validate_esp32_target` — assess an ESP32 FQBN and output GPIO assignments; unknown variants are explicitly marked unverified.
+- `luma_validate_esp32_target` — assess ESP32 FQBN and output GPIO assignments; unknown variants are unverified.
 
 Resources:
 - `luma://toolchain/arduino-cli` — CLI version.
 - `luma://boards/detected` — current board discovery.
-- `luma://firmware/specification-guidance` — safe specification constraints. This is guidance, not a live project record.
+- `luma://firmware/specification-guidance` — safe specification constraints.
 
 Prompts:
 - `generate_esp32_lamp_firmware`
 - `diagnose_compiler_errors`
 - `propose_safe_repair`
 
-The ESP32 target assessment includes a profile for `esp32:esp32:esp32` (classic ESP32 Dev Module). It checks reserved flash GPIOs, input-only GPIOs, duplicate assignments, and warns about boot-strapping/UART pins. Other ESP32 FQBNs receive basic checks and an explicit board-specific verification warning; this is not a substitute for the exact board schematic. Tool installation and flashing remain disabled. Compile executes the configured Arduino CLI against the supplied source path, so only trusted paths should be passed. Persistent project storage is not wired into the MCP transport.
+Serial discovery uses `arduino-cli board list --format json` and retains reported port address, label, protocol, and board candidates. Ports with no matching board are still reported; detection does not verify device identity. The tool does not open serial ports or reset devices. Core installation and flashing remain disabled. Compile executes the configured Arduino CLI against the supplied source path, so only trusted paths should be passed. Persistent project storage is not wired into the MCP transport.
 
 ## Validate
 
