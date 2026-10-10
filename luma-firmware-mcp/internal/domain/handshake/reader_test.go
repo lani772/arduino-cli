@@ -159,3 +159,28 @@ func TestReadIdentityReturnsSourceFailureAndCloses(t *testing.T) {
 		t.Fatalf("source close count = %d, want 1", source.closed())
 	}
 }
+
+func TestReadIdentitySkipsMultipleReadyRecords(t *testing.T) {
+	ready := []byte(`{"protocol":"luma.runtime","protocol_version":1,"event":"ready","firmware_version":"1.0.0","project_id":"luma-test","device_id":"esp32-test","uptime_ms":100}`)
+	source := &fakeLineSource{lines: [][]byte{ready, ready, []byte(validIdentity)}}
+	got, err := ReadIdentity(context.Background(), source, "fresh-token-123456", time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.DeviceID != "esp32-test" {
+		t.Fatalf("unexpected identity: %#v", got)
+	}
+	if source.closed() != 1 {
+		t.Fatalf("source close count = %d, want 1", source.closed())
+	}
+}
+
+func TestReadIdentityRejectsMalformedRecordAndCloses(t *testing.T) {
+	source := &fakeLineSource{lines: [][]byte{[]byte("{")}}
+	if _, err := ReadIdentity(context.Background(), source, "fresh-token-123456", time.Second); err == nil {
+		t.Fatal("expected malformed identity record to be rejected")
+	}
+	if source.closed() != 1 {
+		t.Fatalf("source close count = %d, want 1", source.closed())
+	}
+}
