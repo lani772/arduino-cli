@@ -1,0 +1,36 @@
+name: LUMA Firmware MCP
+
+on:
+  push:
+    paths:
+      - "luma-firmware-mcp/**"
+      - ".github/workflows/luma-firmware-mcp.yml"
+  pull_request:
+    paths:
+      - "luma-firmware-mcp/**"
+      - ".github/workflows/luma-firmware-mcp.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Format, test, and vet
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - name: Check Go formatting
+        working-directory: luma-firmware-mcp
+        run: test -z "$(gofmt -l $(find . -name '*.go' -type f))"
+      - name: Run module tests
+        working-directory: luma-firmware-mcp
+        run: go test ./...
+      - name: Run race-enabled module tests
+        working-directory: luma-firmware-mcp
+        run: go test -race ./...
+      - name: Run go vet
+        working-directory: luma-firmware-mcp
+        run: go vet ./...
