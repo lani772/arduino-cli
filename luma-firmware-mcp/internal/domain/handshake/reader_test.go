@@ -184,3 +184,13 @@ func TestReadIdentityRejectsMalformedRecordAndCloses(t *testing.T) {
 		t.Fatalf("source close count = %d, want 1", source.closed())
 	}
 }
+
+func TestReadIdentityRejectsNilContextWithoutClosingSource(t *testing.T) {
+	source := &fakeLineSource{}
+	if _, err := ReadIdentity(nil, source, "fresh-token-123456", time.Second); !errors.Is(err, ErrNoContext) {
+		t.Fatalf("got %v, want nil-context error", err)
+	}
+	if source.closed() != 0 {
+		t.Fatal("source should not be closed for invalid context")
+	}
+}

@@ -15,6 +15,7 @@ type LineSource interface {
 var (
 	ErrInvalidTimeout = errors.New("handshake timeout must be positive")
 	ErrNoLineSource   = errors.New("handshake line source is nil")
+	ErrNoContext      = errors.New("handshake context is nil")
 )
 
 // ReadIdentity consumes records from an injected source until it receives a valid
@@ -27,6 +28,9 @@ func ReadIdentity(ctx context.Context, source LineSource, expectedChallenge stri
 	}
 	if timeout <= 0 {
 		return zero, ErrInvalidTimeout
+	}
+	if ctx == nil {
+		return zero, ErrNoContext
 	}
 	if err := validateExpectedChallenge(expectedChallenge); err != nil {
 		return zero, err
