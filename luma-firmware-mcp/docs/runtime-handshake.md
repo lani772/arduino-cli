@@ -211,3 +211,8 @@ Fake-source tests cover request fields/framing, invalid challenges, matching res
 ## Runtime exchange lifecycle validation (Task 32)
 
 Additional deterministic fake-source tests now exercise an endless stream of valid readiness records and assert that it cannot extend the reader's overall deadline. Request/response tests also cover malformed identity data and deadline expiration through the exchange path, with source cleanup assertions. The tests are committed as validation coverage, not as executed test results; the Go test suite and race detector remain unverified in this environment.
+
+
+## Fresh-challenge exchange and disconnect handling (Task 33)
+
+Added `RequestFreshIdentity`, which generates a CSPRNG challenge for each exchange and then uses the existing strict request/response validation path. Callers should prefer this API so they do not accidentally reuse a fixed challenge. Tests added for generated challenge transmission/echo and EOF disconnect cleanup. These are source changes only; tests have not been executed here. A successful challenge echo is freshness evidence, not device authentication.

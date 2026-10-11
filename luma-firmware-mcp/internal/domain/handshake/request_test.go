@@ -103,3 +103,46 @@ func TestRequestIdentityDeadlineCoversWriteAndRead(t *testing.T) {
 		t.Fatalf("close count = %d, want 1", source.closed())
 	}
 }
+
+type echoChallengeSource struct {
+	fakeLineSource
+	writes [][]byte
+}
+
+func (f *echoChallengeSource) WriteLine(ctx context.Context, line []byte) error {
+	if err := ctx.Err(); err != nil { return err }
+	f.writes = append(f.writes, append([]byte(nil), line...))
+	var req identifyRequest
+	if err := json.Unmarshal(line, &req); err != nil { return err }
+	response := map[string]any{
+		"protocol": ProtocolName, "protocol_version": ProtocolVersion,
+		"event": "identity", "challenge": req.Challenge,
+		"firmware_version": "1.0.0", "project_id": "luma-test",
+		"device_id": "esp32-test", "uptime_ms": 2345,
+	}
+	encoded, err := json.Marshal(response)
+	if err != nil { return err }
+	f.lines = append(f.lines, encoded)
+	return nil
+}
+
+func TestRequestFreshIdentityGeneratesAndEchoesNewChallenge(t *testing.T) {
+	source := &echoChallengeSource{}
+	got, err := RequestFreshIdentity(context.Background(), source, time.Second)
+	if err != nil { t.Fatal(err) }
+	if got.DeviceID != "esp32-test" { t.Fatalf("unexpected identity: %#v", got) }
+	if len(source.writes) != 1 { t.Fatalf("write count = %d, want 1", len(source.writes)) }
+	var req identifyRequest
+	if err := json.Unmarshal(source.writes[0], &req); err != nil { t.Fatal(err) }
+	if req.Challenge == "" || len(req.Challenge) != ChallengeEntropyBytes*2 {
+		t.Fatalf("generated challenge has invalid length: %q", req.Challenge)
+	}
+	if source.closed() != 1 { t.Fatalf("close count = %d, want 1", source.closed()) }
+}
+
+func TestRequestIdentityReportsDisconnectAndCloses(t *testing.T) {
+	source := &fakeDuplexSource{fakeLineSource: fakeLineSource{err: io.EOF}}
+	_, err := RequestIdentity(context.Background(), source, "fresh-token-123456", time.Second)
+	if !errors.Is(err, io.EOF) { t.Fatalf("got %v, want EOF disconnect", err) }
+	if source.closed() != 1 { t.Fatalf("close count = %d, want 1", source.closed()) }
+}

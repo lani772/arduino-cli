@@ -71,3 +71,20 @@ func RequestIdentity(ctx context.Context, source interface {
 	}
 	return ReadIdentity(ctx, source, challenge, timeout)
 }
+
+// RequestFreshIdentity generates a new CSPRNG challenge for this exchange.
+// Callers should prefer this entry point over supplying a challenge themselves.
+// A successful result is a fresh runtime response, not authenticated identity.
+func RequestFreshIdentity(ctx context.Context, source interface {
+	LineSource
+	LineWriter
+}, timeout time.Duration) (Identity, error) {
+	challenge, err := GenerateChallenge()
+	if err != nil {
+		if source != nil {
+			_ = source.Close()
+		}
+		return Identity{}, fmt.Errorf("%w: %w", ErrChallengeEntropy, err)
+	}
+	return RequestIdentity(ctx, source, challenge, timeout)
+}
