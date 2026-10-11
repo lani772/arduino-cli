@@ -110,3 +110,76 @@ Do not collapse these levels into one boolean. In particular, `hardware_verified
 ## Current implementation boundary
 
 The current `arduino_verify_device` tool only re-runs `arduino-cli board list --format json`. It does not implement this protocol, open serial ports, send challenges, receive firmware messages, or authenticate a device. Its `hardware_verified` result must remain false.
+
+
+## Final protocol contract (Task 28)
+
+This section freezes the behavior expected of the protocol-v1 parser and reader before a real serial transport is introduced. If implementation and this contract disagree, resolve the disagreement in code and tests before enabling serial access.
+
+### Record and state rules
+
+- Encoding is UTF-8 JSON, one object per LF-terminated line. A CR immediately before LF is permitted. Serial framing must enforce the 4096-byte maximum before buffering an unbounded line.
+- A valid `ready` record is informational only. The reader may skip it and continue waiting for an identity response.
+- The first non-readiness record is treated as the identity candidate. If it is malformed, unknown, oversized, for another protocol/version, or has the wrong event/challenge, fail closed; do not silently scan past invalid records looking for a success.
+- Exactly one JSON value is permitted per record. Unknown fields are rejected in protocol v1 so unexpected semantics do not pass unnoticed.
+- Required identity strings must be non-blank and at most 128 bytes. Uptime must be present and non-negative. Project/device values are claims from the responding endpoint until separately compared with expected values or authenticated.
+- A challenge is caller-supplied to the current parser/reader. It must be non-blank, have no surrounding whitespace, and be at most 256 bytes. The live verifier must generate at least 128 bits of cryptographically secure randomness, use each challenge once, and never use a fixed production token. The reader does not itself generate or transmit a challenge.
+- A valid echoed challenge provides freshness against stale buffered responses, not cryptographic authenticity. Treat serial input as untrusted, including when the port is physically local.
+
+### Timeout and cancellation contract
+
+- The caller supplies a positive timeout. One overall deadline covers readiness records and the identity response; repeated readiness records must not restart or extend the deadline.
+- Caller cancellation takes precedence as a cancellation outcome. Expiration of the reader's own deadline returns a deadline-exceeded error. Neither outcome implies that firmware is absent or defective.
+- Once arguments have passed validation and reading begins, the source must be closed on success, parse failure, read failure, cancellation, and timeout. Invalid arguments do not transfer source ownership and must not close the source.
+- A `LineSource` implementation must unblock a pending read when its context is cancelled or when `Close` is called. A transport that cannot guarantee this contract must not be wired into this reader, because it can leak a goroutine or retain a port after timeout.
+- The current reader closes the source but does not propagate a `Close` error. The future serial adapter should report close failures through diagnostics without replacing the primary handshake failure. Whether close errors become a typed result is an implementation decision for the transport task.
+- For live serial, start with a configurable **3-second overall response deadline** after the challenge is sent; validate this against real boot timing on supported boards before treating it as a release default. Port-open time and firmware boot delay must not silently extend the response deadline.
+
+### Threat model
+
+| Threat or failure | Required mitigation | Residual limitation |
+| --- | --- | --- |
+| Stale bytes or a prior identity record | Fresh single-use random challenge; exact challenge match | Echo-only challenge is not authentication |
+| Malicious/noisy serial output | Size limits, strict JSON/schema checks, bounded deadline, fail closed on invalid identity candidate | Parser cannot prove who produced bytes |
+| Wrong device/firmware on selected port | Compare returned project/device identifiers with expected configuration and report mismatch | Self-reported identifiers can be spoofed |
+| Unsupported or altered protocol fields | Exact protocol/version/event checks; reject unknown fields | Future protocol extensions require an explicit version/schema update |
+| Read never completes | Context deadline, cancellation-aware source, close-on-exit tests | A broken adapter can still violate cancellation contract |
+| Accidental physical side effects | Read-only protocol; no lamp commands; explicit consent before port open | Some serial drivers may toggle DTR/RTS on open; platform behavior needs testing |
+| Replay or active serial impersonation | Random challenge and constant-time equality check | Use device-bound MAC/signature and reviewed key provisioning before claiming authenticated identity |
+| Sensitive data leaks through diagnostics | Do not log challenge values, credentials, or raw untrusted records by default | Logging implementation requires its own review |
+
+Out of scope for protocol v1: firmware flashing, GPIO/relay control, secret provisioning, key rotation, and proof of secure boot. The handshake must not authorize any of those actions.
+
+### Test matrix and acceptance criteria
+
+The existing fake-source tests are the hardware-independent baseline. Keep them deterministic and run them before enabling a live adapter.
+
+| Case | Expected result | Existing coverage / required follow-up |
+| --- | --- | --- |
+| Valid identity and matching challenge | Return parsed identity and close source once | Covered by `TestReadIdentitySkipsReadyThenAcceptsIdentityAndCloses` |
+| One or repeated valid readiness records before identity | Continue within the same deadline | Covered by readiness reader tests |
+| Wrong challenge | Reject; no identity returned; close source | Covered by `TestReadIdentityRejectsChallengeMismatchAndCloses` |
+| Malformed, oversized, unknown-field, multi-value, wrong-version or wrong-event identity | Reject; never report success | Parser and malformed-reader coverage exists; add reader-level cases where needed |
+| No data before deadline | Return deadline exceeded and close source | Covered by `TestReadIdentityHonorsTimeoutAndClosesSource` |
+| Caller cancellation | Return cancellation and close source | Covered by `TestReadIdentityHonorsCallerCancellationAndCloses` |
+| Read error / EOF | Return wrapped source error and close source | Covered by `TestReadIdentityReturnsSourceFailureAndCloses` |
+| Invalid nil source/context, non-positive timeout, or invalid challenge | Reject before taking ownership; do not close source | Covered in argument validation tests |
+| Endless stream of readiness records | Overall deadline still expires; no deadline reset | **Add/retain a deterministic test before live serial integration** |
+| Source ignores cancellation or cannot unblock on close | Adapter contract test must detect/avoid using such an adapter | Required for each concrete transport |
+| Close reports an error | Preserve primary result and surface close failure diagnostically | Required when transport adapter defines close-error handling |
+| Challenge generation | CSPRNG output, correct minimum entropy, uniqueness across calls | Required in live verifier; parser tests do not cover generation |
+| Port selection and consent | Open only selected port after explicit consent; no implicit reset | Required in live adapter integration tests |
+| Physical device mismatch | Report mismatch and leave `hardware_verified=false` | Required in simulator and supervised hardware tests |
+
+### Gate before live serial implementation
+
+Do not add a real serial adapter until the following are true:
+
+1. The test suite is executed successfully, including race detection; source-level inspection alone is not sufficient.
+2. A deterministic repeated-readiness/deadline test proves that the single overall deadline cannot be extended by incoming records.
+3. The adapter contract proves cancellation unblocks reads and port cleanup happens on every exit path.
+4. Port opening requires explicit operator consent and an exact selected port; no automatic port guessing or reset behavior.
+5. Results distinguish a received runtime response from authenticated device identity. `hardware_verified` remains false unless the higher-level verification contract explicitly defines and validates stronger evidence.
+6. The firmware-side protocol is implemented and tested against the same schema. The JSON examples in this document are not proof that firmware currently emits these records.
+
+**Verification note:** this specification update does not mean tests have run. At the time of this commit, test execution, race detection, and physical serial testing remain unverified.
