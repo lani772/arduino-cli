@@ -1,6 +1,6 @@
 # LUMA ESP32 Runtime Handshake — Protocol Design
 
-Status: **parser and fake-source reader implemented; live serial handshake not implemented**
+Status: **parser, fake-source reader, and consent-gated transport interface implemented; live serial handshake not implemented**
 
 ## Purpose
 
@@ -183,3 +183,12 @@ Do not add a real serial adapter until the following are true:
 6. The firmware-side protocol is implemented and tested against the same schema. The JSON examples in this document are not proof that firmware currently emits these records.
 
 **Verification note:** this specification update does not mean tests have run. At the time of this commit, test execution, race detection, and physical serial testing remain unverified.
+
+
+## Transport interface and lifecycle (Task 29)
+
+The hardware-independent handshake.Transport interface accepts a context and the exact selected port, returning a LineSource. OpenSource is the shared guard: it rejects nil context/transport, missing explicit operator consent, blank or whitespace-padded port identifiers, and an already-cancelled context before calling the transport. It never enumerates or guesses ports. Transport-open errors are wrapped for classification, and a nil source is rejected.
+
+Once returned, the caller owns the source. Passing it to ReadIdentity transfers the source into the reader's close-on-exit lifecycle. The transport implementation must honor context cancellation while opening, and the returned source must unblock reads on cancellation or close. No concrete serial adapter, port enumeration, DTR/RTS control, or hardware access is added in this task.
+
+Fake-transport tests cover consent/port validation without opening, exact-port forwarding, open failure, nil source, pre-cancelled context, and source cleanup when the reader returns a read error. These tests have been added but have NOT been executed in this environment.
