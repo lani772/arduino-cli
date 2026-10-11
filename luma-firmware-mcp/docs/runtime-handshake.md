@@ -199,3 +199,10 @@ Fake-transport tests cover consent/port validation without opening, exact-port f
 The handshake package now exposes GenerateChallenge, which reads 16 bytes from Go's operating-system cryptographic random source and encodes them as 32 lowercase hexadecimal characters (128 bits of entropy). Entropy read failures are returned as errors; the implementation does not fall back to timestamps, counters, or fixed values. GenerateChallengeFrom exists only to test deterministic encoding and entropy-source failures; production callers should use GenerateChallenge. Each verification attempt must call the generator separately and must not reuse or log a challenge.
 
 The reader's timeout remains a single context deadline spanning readiness records and identity parsing. Tests for challenge generation have been added, including uniqueness checks and short-entropy failure. Tests have not been executed here. Challenge generation does not transmit the challenge: sending it and integrating the live serial lifecycle remain later tasks.
+
+
+## Identify request encoder and exchange (Task 31)
+
+The hardware-independent package now provides `EncodeIdentifyRequest` for the protocol-v1 JSON command and `RequestIdentity` to write one newline-terminated request and validate the returned identity against the same challenge. The exchange shares one overall context deadline across write and read, and closes the source if writing fails or when reading completes. Invalid arguments are rejected before any write or ownership transfer. The injected writer must honor context cancellation; a future concrete transport must test this contract.
+
+Fake-source tests cover request fields/framing, invalid challenges, matching response, challenge mismatch, and cleanup after write failure. These tests were added but have not been executed in this environment. This is not a live serial implementation and does not authenticate device identity.
