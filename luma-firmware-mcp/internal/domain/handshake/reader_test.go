@@ -194,3 +194,46 @@ func TestReadIdentityRejectsNilContextWithoutClosingSource(t *testing.T) {
 		t.Fatal("source should not be closed for invalid context")
 	}
 }
+
+type readinessFloodSource struct {
+	mu sync.Mutex
+	closeCount int
+}
+
+func (f *readinessFloodSource) ReadLine(ctx context.Context) ([]byte, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+	return []byte(`{"protocol":"luma.runtime","protocol_version":1,"event":"ready","firmware_version":"1.0.0","project_id":"luma-test","device_id":"esp32-test","uptime_ms":100}`), nil
+}
+
+func (f *readinessFloodSource) Close() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.closeCount++
+	return nil
+}
+
+func (f *readinessFloodSource) closed() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.closeCount
+}
+
+func TestReadIdentityReadinessFloodCannotExtendOverallDeadline(t *testing.T) {
+	source := &readinessFloodSource{}
+	start := time.Now()
+	_, err := ReadIdentity(context.Background(), source, "fresh-token-123456", 25*time.Millisecond)
+	elapsed := time.Since(start)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("got %v, want deadline exceeded", err)
+	}
+	if elapsed > time.Second {
+		t.Fatalf("readiness stream extended deadline: elapsed %s", elapsed)
+	}
+	if source.closed() != 1 {
+		t.Fatalf("source close count = %d, want 1", source.closed())
+	}
+}

@@ -82,3 +82,24 @@ func TestRequestIdentityRejectsInvalidArgumentsWithoutWritingOrClosing(t *testin
 	}
 	if len(source.writes) != 0 || source.closed() != 0 { t.Fatal("invalid arguments must not write or close source") }
 }
+
+func TestRequestIdentityRejectsMalformedResponseAndCloses(t *testing.T) {
+	source := &fakeDuplexSource{fakeLineSource: fakeLineSource{lines: [][]byte{[]byte("{")}}}
+	if _, err := RequestIdentity(context.Background(), source, "fresh-token-123456", time.Second); err == nil {
+		t.Fatal("expected malformed response to be rejected")
+	}
+	if source.closed() != 1 {
+		t.Fatalf("close count = %d, want 1", source.closed())
+	}
+}
+
+func TestRequestIdentityDeadlineCoversWriteAndRead(t *testing.T) {
+	source := &fakeDuplexSource{fakeLineSource: fakeLineSource{err: context.DeadlineExceeded}}
+	_, err := RequestIdentity(context.Background(), source, "fresh-token-123456", 20*time.Millisecond)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("got %v, want deadline exceeded", err)
+	}
+	if source.closed() != 1 {
+		t.Fatalf("close count = %d, want 1", source.closed())
+	}
+}

@@ -206,3 +206,8 @@ The reader's timeout remains a single context deadline spanning readiness record
 The hardware-independent package now provides `EncodeIdentifyRequest` for the protocol-v1 JSON command and `RequestIdentity` to write one newline-terminated request and validate the returned identity against the same challenge. The exchange shares one overall context deadline across write and read, and closes the source if writing fails or when reading completes. Invalid arguments are rejected before any write or ownership transfer. The injected writer must honor context cancellation; a future concrete transport must test this contract.
 
 Fake-source tests cover request fields/framing, invalid challenges, matching response, challenge mismatch, and cleanup after write failure. These tests were added but have not been executed in this environment. This is not a live serial implementation and does not authenticate device identity.
+
+
+## Runtime exchange lifecycle validation (Task 32)
+
+Additional deterministic fake-source tests now exercise an endless stream of valid readiness records and assert that it cannot extend the reader's overall deadline. Request/response tests also cover malformed identity data and deadline expiration through the exchange path, with source cleanup assertions. The tests are committed as validation coverage, not as executed test results; the Go test suite and race detector remain unverified in this environment.
