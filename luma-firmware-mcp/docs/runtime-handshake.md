@@ -216,3 +216,8 @@ Additional deterministic fake-source tests now exercise an endless stream of val
 ## Fresh-challenge exchange and disconnect handling (Task 33)
 
 Added `RequestFreshIdentity`, which generates a CSPRNG challenge for each exchange and then uses the existing strict request/response validation path. Callers should prefer this API so they do not accidentally reuse a fixed challenge. Tests added for generated challenge transmission/echo and EOF disconnect cleanup. These are source changes only; tests have not been executed here. A successful challenge echo is freshness evidence, not device authentication.
+
+
+## ESP32 reference firmware (Task 34)
+
+A reference Arduino sketch now lives at `firmware/esp32/luma_runtime_protocol/`. It emits a protocol-v1 readiness record and handles bounded, newline-delimited identify requests using the same field names as the Go parser. Invalid requests are ignored, oversized lines are discarded, and the sketch does not touch lamp GPIOs. It uses ArduinoJson and must be compiled against the intended ESP32 board package before use. Source addition is not evidence of a successful build or hardware test. The echoed challenge is not device authentication.
