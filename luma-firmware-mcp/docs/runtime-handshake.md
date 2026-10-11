@@ -192,3 +192,10 @@ The hardware-independent handshake.Transport interface accepts a context and the
 Once returned, the caller owns the source. Passing it to ReadIdentity transfers the source into the reader's close-on-exit lifecycle. The transport implementation must honor context cancellation while opening, and the returned source must unblock reads on cancellation or close. No concrete serial adapter, port enumeration, DTR/RTS control, or hardware access is added in this task.
 
 Fake-transport tests cover consent/port validation without opening, exact-port forwarding, open failure, nil source, pre-cancelled context, and source cleanup when the reader returns a read error. These tests have been added but have NOT been executed in this environment.
+
+
+## Challenge generation (Task 30)
+
+The handshake package now exposes GenerateChallenge, which reads 16 bytes from Go's operating-system cryptographic random source and encodes them as 32 lowercase hexadecimal characters (128 bits of entropy). Entropy read failures are returned as errors; the implementation does not fall back to timestamps, counters, or fixed values. GenerateChallengeFrom exists only to test deterministic encoding and entropy-source failures; production callers should use GenerateChallenge. Each verification attempt must call the generator separately and must not reuse or log a challenge.
+
+The reader's timeout remains a single context deadline spanning readiness records and identity parsing. Tests for challenge generation have been added, including uniqueness checks and short-entropy failure. Tests have not been executed here. Challenge generation does not transmit the challenge: sending it and integrating the live serial lifecycle remain later tasks.
