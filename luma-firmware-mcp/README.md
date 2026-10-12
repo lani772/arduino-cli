@@ -49,3 +49,8 @@ go vet ./...
 ```
 
 Verification uses read-only serial discovery and does not open ports or reset the device. A successful upload exit code and a matching board candidate are evidence only; `hardware_verified` remains false until a live runtime handshake is implemented. The protocol contract is documented in [`docs/runtime-handshake.md`](docs/runtime-handshake.md).
+
+
+## Supported-board status
+
+See [supported boards and GPIO constraints](docs/supported-boards.md) for the exact known board profile, pin restrictions, warnings, and validation gates. Currently, only the exact classic ESP32 Dev Module FQBN has a registered pin profile. Other ESP32-family FQBNs are unverified and require board-specific review. Documentation and simulated tests do not constitute a successful compile or hardware validation.
