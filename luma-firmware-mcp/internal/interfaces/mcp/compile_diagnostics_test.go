@@ -11,7 +11,7 @@ import (
 
 func TestCompileToolReturnsStructuredDiagnosticsOnCompilerFailure(t *testing.T) {
  cli := arduino.NewFakeCLI()
- cli.CompileResult = build.Result{ID:"compile", Status:build.StatusFailed, ExitCode:1, Output:"src/main.cpp:12:4: error: invalid conversion\\nsrc/main.cpp:13:2: warning: unused variable"}
+ cli.CompileResult = build.Result{ID:"compile", Status:build.StatusFailed, ExitCode:1, Output:"src/main.cpp:12:4: error: invalid conversion\nsrc/main.cpp:13:2: warning: unused variable"}
  r := NewRegistry()
  if err := RegisterArduinoTools(r, cli); err != nil { t.Fatal(err) }
  raw, _ := json.Marshal(map[string]string{"source_path":"/tmp/sketch","fqbn":"esp32:esp32:esp32"})
