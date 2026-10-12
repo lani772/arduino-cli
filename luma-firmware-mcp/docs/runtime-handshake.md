@@ -230,3 +230,10 @@ The Go handshake domain now exposes `ValidateIdentity` for a parsed runtime resp
 This validation is separate from parsing and from authentication. Values supplied by the endpoint remain self-reported; a matching device label or firmware version does not prove that the board is genuine. The reference sketch reports `LUMA_FIRMWARE_VERSION` and `LUMA_PROJECT_ID` compile-time values and derives a non-secret label from the ESP32 eFuse MAC. Keep deployment IDs non-secret, configure expected values from a trusted registration record, and do not enable live serial verification based on these checks alone.
 
 Unit tests have been added for exact matches, each mismatch category, malformed versions, and unspecified expected values. They have **not** been executed in this environment.
+
+
+## GPIO validation integration (Task 36)
+
+The firmware specification validator now reuses the ESP32 target assessment for exact known-profile constraints after its structural checks. For the classic `esp32:esp32:esp32` profile, input-only GPIOs 34–39 are rejected for both lamp and status outputs, and the existing flash-reserved pin checks remain enforced. Boot-strapping and UART0 pin concerns remain warnings in the dedicated target assessment rather than silent assumptions.
+
+Unknown ESP32 FQBNs are not assigned the classic board's pin map. They still receive structural/range/duplicate checks, but require board-specific review; a successful generic specification validation is not proof that the selected variant supports the pins. Regression tests were added for input-only lamp pins, input-only status pin, and unknown-variant behavior. Tests have not been executed in this environment.

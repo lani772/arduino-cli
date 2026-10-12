@@ -34,6 +34,14 @@ func (s Specification) Validate() error {
   seen[l.GPIO]=true
   if l.GPIO>=6&&l.GPIO<=11{return errors.Invalid(fmt.Sprintf("lamps[%d].gpio",i),"GPIO 6-11 is reserved on common ESP32 modules")}
  }
+ // Apply exact-board electrical constraints after structural checks. Unknown
+ // variants intentionally remain unverified rather than inheriting classic rules.
+ lampPins := make([]int, len(s.Lamps))
+ for i, lamp := range s.Lamps { lampPins[i] = lamp.GPIO }
+ assessment := AssessESP32Target(s.Target.BoardFQBN, s.StatusGPIO, lampPins)
+ if !assessment.Valid && assessment.KnownProfile {
+  return errors.Invalid("gpio_assignments", assessment.Errors[0])
+ }
  return nil
 }
 type SourceFile struct { Path string; Content string }
