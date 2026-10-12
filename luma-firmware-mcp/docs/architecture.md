@@ -29,3 +29,10 @@ Compiler-guided repair is proposal-only. The repair loop validates a candidate p
 The application-layer `PatchApprovalService.ApplyApproved` is the controlled persistence entry point. The caller must pass explicit approval, the service re-snapshots the project, and each update/delete is guarded by the expected SHA-256 of the current file contents. Unsafe or non-normalized paths, stale hashes, invalid operations, cancelled contexts, and write failures are rejected. The project-files adapter must implement `Replace` atomically; filesystem implementations should stage changes and atomically swap or rollback on failure.
 
 This is an application API, not yet an MCP approval UI/tool. A future transport integration must keep the proposed patch separate and collect explicit approval from the human before invoking it. Firmware upload remains a separate operation and is not triggered by patch approval.
+
+
+## Repair-loop reliability boundary
+
+The repair loop performs one baseline compilation and may return one validated repair proposal when structured compiler errors are available. It does not retry builds, restore files, or persist proposed changes. Malformed patches, stale expected hashes, AI failures, and cancelled contexts return errors without writing project source. The caller must obtain explicit approval and invoke the patch-approval service; a later compile is a separate operation after that approved persistence succeeds.
+
+The filesystem adapter's `Replace` operation must provide atomic replacement. If persistence fails, the approval service returns the error; guarantees about the on-disk state depend on that adapter contract.
