@@ -8,6 +8,7 @@ import (
  "strings"
 
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/application"
+ "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/diagnostic"
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/firmware"
 )
 
@@ -47,7 +48,10 @@ func RegisterArduinoTools(r *Registry,cli application.ArduinoCLI)error{
   if err:=json.Unmarshal(raw,&p);err!=nil{return nil,fmt.Errorf("invalid compile arguments: %w",err)}
   if strings.TrimSpace(p.SourcePath)==""||strings.TrimSpace(p.FQBN)==""{return nil,fmt.Errorf("source_path and fqbn are required")}
   result,err:=cli.Compile(ctx,p.SourcePath,p.FQBN)
-  response:=map[string]any{"build":result}
+  parsed := application.CompilerDiagnosticParser{}.Parse(result.Output)
+  summary := map[string]int{"errors":0,"warnings":0,"info":0}
+  for _, item := range parsed { switch item.Severity { case diagnostic.SeverityError: summary["errors"]++; case diagnostic.SeverityWarning: summary["warnings"]++; default: summary["info"]++ } }
+  response:=map[string]any{"build":result,"diagnostics":parsed,"diagnostic_summary":summary}
   if err!=nil{response["error"]=err.Error()}
   return response,nil
  }})
