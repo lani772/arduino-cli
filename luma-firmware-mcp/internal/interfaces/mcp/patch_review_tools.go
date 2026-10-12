@@ -95,11 +95,16 @@ func RegisterPatchReviewTools(r *Registry, projects application.ProjectStore, ap
     delete(state.pending,args.PatchID);state.decided[args.PatchID]="rejected";state.mu.Unlock()
     return map[string]any{"patch_id":args.PatchID,"status":"rejected","files_written":false,"build_triggered":false},nil
    }
+   delete(state.pending,args.PatchID)
+   state.decided[args.PatchID]="processing"
    state.mu.Unlock()
-   if err:=approvals.ApplyApproved(ctx,proposal.Project,proposal.Patch,true);err!=nil{return nil,fmt.Errorf("approved patch was not accepted: %w",err)}
+   if err:=approvals.ApplyApproved(ctx,proposal.Project,proposal.Patch,true);err!=nil{
+    state.mu.Lock();delete(state.decided,args.PatchID);state.pending[args.PatchID]=proposal;state.mu.Unlock()
+    return nil,fmt.Errorf("approved patch was not accepted: %w",err)
+   }
    result,buildErr:=builder.Compile(ctx,proposal.Project,proposal.FQBN)
    state.mu.Lock()
-   delete(state.pending,args.PatchID);state.decided[args.PatchID]="approved"
+   state.decided[args.PatchID]="approved"
    state.mu.Unlock()
    response:=map[string]any{"patch_id":args.PatchID,"status":"approved_and_applied","files_written":true,"build_triggered":true,"build":result}
    if buildErr!=nil{response["build_error"]=buildErr.Error()}
