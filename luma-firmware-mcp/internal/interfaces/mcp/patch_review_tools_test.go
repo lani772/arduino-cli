@@ -9,8 +9,6 @@ import (
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/application"
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/board"
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/build"
- "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/device"
- "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/diagnostic"
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/library"
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/project"
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/repair"
@@ -33,9 +31,6 @@ func(c *reviewCLI)InstallLibrary(context.Context,library.Dependency)error{return
 var _ application.ProjectStore = reviewProjectStore{}
 var _ application.ProjectFiles = (*reviewFiles)(nil)
 var _ application.ArduinoCLI = (*reviewCLI)(nil)
-var _ application.SerialDiscovery = (application.SerialDiscovery)(nil)
-var _ = device.SerialPort{}
-var _ = diagnostic.Diagnostic{}
 
 func reviewTestSetup(t *testing.T)(*Registry,*reviewFiles,*reviewCLI){
  t.Helper()
