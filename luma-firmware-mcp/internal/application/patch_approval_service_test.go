@@ -41,3 +41,11 @@ func TestPatchApprovalHonorsCancellation(t *testing.T) {
  if !errors.Is(err,context.Canceled) { t.Fatalf("expected cancellation, got %v",err) }
  if files.replaces!=0 { t.Fatal("cancelled patch was persisted") }
 }
+
+func TestPatchApprovalPropagatesPersistenceFailureWithoutPartialMutation(t *testing.T) {
+ files := &memoryProjectFiles{data: map[string]string{"main.ino":"before"}, failReplace:true}
+ patch := repair.Patch{ID:"p", Description:"approved update", Status:repair.StatusProposed, Files:[]repair.FileChange{{Path:"main.ino", Operation:repair.OperationUpdate, Content:"after", ExpectedSHA:repair.ContentSHA("before")}}}
+ err := (PatchApprovalService{Files:files}).ApplyApproved(context.Background(), project.Project{ID:"p", Name:"lamp", WorkspaceID:"ws"}, patch, true)
+ if err == nil { t.Fatal("expected persistence error") }
+ if files.data["main.ino"] != "before" { t.Fatalf("failed replace changed source: %#v", files.data) }
+}
