@@ -54,3 +54,10 @@ Verification uses read-only serial discovery and does not open ports or reset th
 ## Supported-board status
 
 See [supported boards and GPIO constraints](docs/supported-boards.md) for the exact known board profile, pin restrictions, warnings, and validation gates. Currently, only the exact classic ESP32 Dev Module FQBN has a registered pin profile. Other ESP32-family FQBNs are unverified and require board-specific review. Documentation and simulated tests do not constitute a successful compile or hardware validation.
+
+
+## Explicit patch review API
+
+The MCP package includes a review-first patch workflow through `RegisterPatchReviewTools`: `luma_repair_patch_propose` validates a candidate against a fresh source snapshot without writing, and `luma_repair_patch_decide` rejects it without side effects or applies it after explicit approval and then compiles. This registration API is covered by tests in `internal/interfaces/mcp/patch_review_tools_test.go`.
+
+These tools are not yet exposed by the default server entry point. Persistent project storage and a workspace-confined, atomic filesystem adapter must be configured before runtime registration; the current server intentionally does not accept arbitrary filesystem paths for repair writes.
