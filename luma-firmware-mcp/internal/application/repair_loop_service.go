@@ -14,6 +14,7 @@ import (
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/repair"
 )
 var ErrRepairAttemptsExhausted = errors.New("repair attempts exhausted")
+var ErrPatchApprovalRequired = errors.New("repair patch proposed; explicit approval required")
 
 // ProjectFiles isolates orchestration from filesystem details. Replace must be atomic.
 type ProjectFiles interface {
@@ -65,9 +66,10 @@ func (s RepairLoopService) Run(ctx context.Context,p project.Project,fqbn string
   encoded,err:=json.Marshal(working);if err!=nil{return out,err}
   patch,err:=s.Engineer.Diagnose(ctx,diagnostics,string(encoded));if err!=nil{return out,fmt.Errorf("diagnose build failure: %w",err)}
   if err:=patch.Validate();err!=nil{return out,fmt.Errorf("AI returned invalid patch: %w",err)}
-  patched,err:=repair.Apply(working,patch);if err!=nil{return out,fmt.Errorf("reject unsafe or stale repair patch: %w",err)}
-  if err:=s.Files.Replace(ctx,p,patched);err!=nil{return out,fmt.Errorf("persist repair patch: %w",err)}
-  working=patched;out.Patches=append(out.Patches,patch);out.Attempts++
+  if _,err:=repair.Apply(working,patch);err!=nil{return out,fmt.Errorf("reject unsafe or stale repair patch: %w",err)}
+  // Return a validated proposal only. Source mutation is handled by PatchApprovalService after explicit approval.
+  out.Patches=append(out.Patches,patch)
+  return out,ErrPatchApprovalRequired
  }
  return out,ErrRepairAttemptsExhausted
 }

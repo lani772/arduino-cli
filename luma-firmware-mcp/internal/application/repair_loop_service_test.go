@@ -36,15 +36,15 @@ func (e *loopEngineer) Diagnose(context.Context,[]diagnostic.Diagnostic,string)(
 func failedBuild()build.Result{return build.Result{ID:"b1",Status:build.StatusFailed,ExitCode:1,Output:"src/main.ino:4:2: error: expected ';'"}}
 func passedBuild()build.Result{return build.Result{ID:"b2",Status:build.StatusPassed,ExitCode:0}}
 
-func TestRepairLoopRepairsAndRebuilds(t *testing.T){
- cli:=&loopCLI{results:[]build.Result{failedBuild(),passedBuild()}}
+func TestRepairLoopProposesWithoutMutatingSource(t *testing.T){
+ cli:=&loopCLI{results:[]build.Result{failedBuild()}}
  files:=&memoryProjectFiles{data:map[string]string{"src/main.ino":"old source"}}
  engineer:=&loopEngineer{patches:[]repair.Patch{{ID:"p1",Description:"fix syntax",Status:repair.StatusProposed,Files:[]repair.FileChange{{Path:"src/main.ino",Operation:repair.OperationUpdate,Content:"fixed source",ExpectedSHA:repair.ContentSHA("old source")}}}}}
  svc:=RepairLoopService{Builder:BuildService{CLI:cli},Engineer:engineer,Parser:CompilerDiagnosticParser{},Files:files,MaxAttempts:2}
  result,err:=svc.Run(context.Background(),project.Project{ID:"p",Name:"lamp",WorkspaceID:"ws",Source:"/tmp/p"},"esp32:esp32:esp32")
- if err!=nil{t.Fatal(err)}
- if !result.Recovered||result.Attempts!=1||cli.calls!=2{t.Fatalf("unexpected result=%+v calls=%d",result,cli.calls)}
- if files.data["src/main.ino"]!="fixed source"{t.Fatalf("patch not persisted: %#v",files.data)}
+ if !errors.Is(err,ErrPatchApprovalRequired){t.Fatalf("expected approval boundary, got %v",err)}
+ if len(result.Patches)!=1||result.Attempts!=0{t.Fatalf("unexpected proposal result: %+v",result)}
+ if files.data["src/main.ino"]!="old source"||files.replaces!=0{t.Fatalf("proposal changed active source: %#v",files.data)}
 }
 func TestRepairLoopRestoresOriginalAfterExhaustion(t *testing.T){
  cli:=&loopCLI{results:[]build.Result{failedBuild(),failedBuild(),failedBuild()}}

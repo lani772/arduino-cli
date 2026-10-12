@@ -20,3 +20,12 @@ The `arduino_compile` MCP tool returns the build result and parses recognizable 
 Compilation does not upload firmware. A failed compiler exit is reported alongside the build result and diagnostics; it is not converted into success, and no automatic AI repair or arbitrary shell command is executed by this change. Firmware-spec validation remains a separate explicit tool; this change does not yet orchestrate generation, validation, and compilation as one atomic workflow.
 
 Regression coverage has been added for a failed compile containing both an error and a warning. Tests have not been executed in this environment.
+
+
+## Repair proposal and approval boundary (Task 40)
+
+Compiler-guided repair is proposal-only. The repair loop validates a candidate patch against an in-memory snapshot and returns it with `ErrPatchApprovalRequired`; it does not write the candidate into the active project or silently continue rebuilding modified source. Callers must present the proposed diff and obtain an explicit user decision.
+
+The application-layer `PatchApprovalService.ApplyApproved` is the controlled persistence entry point. The caller must pass explicit approval, the service re-snapshots the project, and each update/delete is guarded by the expected SHA-256 of the current file contents. Unsafe or non-normalized paths, stale hashes, invalid operations, cancelled contexts, and write failures are rejected. The project-files adapter must implement `Replace` atomically; filesystem implementations should stage changes and atomically swap or rollback on failure.
+
+This is an application API, not yet an MCP approval UI/tool. A future transport integration must keep the proposed patch separate and collect explicit approval from the human before invoking it. Firmware upload remains a separate operation and is not triggered by patch approval.
