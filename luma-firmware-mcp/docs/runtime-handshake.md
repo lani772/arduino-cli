@@ -221,3 +221,12 @@ Added `RequestFreshIdentity`, which generates a CSPRNG challenge for each exchan
 ## ESP32 reference firmware (Task 34)
 
 A reference Arduino sketch now lives at `firmware/esp32/luma_runtime_protocol/`. It emits a protocol-v1 readiness record and handles bounded, newline-delimited identify requests using the same field names as the Go parser. Invalid requests are ignored, oversized lines are discarded, and the sketch does not touch lamp GPIOs. It uses ArduinoJson and must be compiled against the intended ESP32 board package before use. Source addition is not evidence of a successful build or hardware test. The echoed challenge is not device authentication.
+
+
+## Identity and firmware-version validation (Task 35)
+
+The Go handshake domain now exposes `ValidateIdentity` for a parsed runtime response and optional caller-trusted expected values. It requires a numeric `major.minor.patch` firmware version, validates non-empty project/device identifiers, and exactly compares each expected version, project ID, or device ID when supplied. A mismatch returns `ErrIdentityMismatch`; malformed versions return `ErrInvalidVersion`. Empty expectations intentionally mean “not configured”, not “trusted”.
+
+This validation is separate from parsing and from authentication. Values supplied by the endpoint remain self-reported; a matching device label or firmware version does not prove that the board is genuine. The reference sketch reports `LUMA_FIRMWARE_VERSION` and `LUMA_PROJECT_ID` compile-time values and derives a non-secret label from the ESP32 eFuse MAC. Keep deployment IDs non-secret, configure expected values from a trusted registration record, and do not enable live serial verification based on these checks alone.
+
+Unit tests have been added for exact matches, each mismatch category, malformed versions, and unspecified expected values. They have **not** been executed in this environment.
