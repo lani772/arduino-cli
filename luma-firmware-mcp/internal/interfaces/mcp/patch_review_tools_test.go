@@ -1,0 +1,84 @@
+package mcp
+
+import (
+ "context"
+ "encoding/json"
+ "errors"
+ "testing"
+
+ "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/application"
+ "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/board"
+ "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/build"
+ "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/device"
+ "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/diagnostic"
+ "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/library"
+ "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/project"
+ "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/repair"
+)
+
+type reviewProjectStore struct { p project.Project }
+func (s reviewProjectStore) Create(context.Context,project.Project)error{return errors.New("unused")}
+func (s reviewProjectStore) Get(_ context.Context,id string)(project.Project,error){if id!=s.p.ID{return project.Project{},errors.New("not found")};return s.p,nil}
+
+type reviewFiles struct { data map[string]string; writes int; fail bool }
+func(f *reviewFiles)Snapshot(context.Context,project.Project)(map[string]string,error){out:=map[string]string{};for k,v:=range f.data{out[k]=v};return out,nil}
+func(f *reviewFiles)Replace(_ context.Context,_ project.Project,next map[string]string)error{if f.fail{return errors.New("write failed")};f.data=map[string]string{};for k,v:=range next{f.data[k]=v};f.writes++;return nil}
+
+type reviewCLI struct { builds int; result build.Result }
+func(c *reviewCLI)Version(context.Context)(string,error){return "test",nil}
+func(c *reviewCLI)ListBoards(context.Context)([]board.Board,error){return nil,nil}
+func(c *reviewCLI)Compile(context.Context,string,string)(build.Result,error){c.builds++;return c.result,nil}
+func(c *reviewCLI)Upload(context.Context,string,string,string)(build.Result,error){return build.Result{},errors.New("unused")}
+func(c *reviewCLI)InstallLibrary(context.Context,library.Dependency)error{return nil}
+var _ application.ProjectStore = reviewProjectStore{}
+var _ application.ProjectFiles = (*reviewFiles)(nil)
+var _ application.ArduinoCLI = (*reviewCLI)(nil)
+var _ application.SerialDiscovery = (application.SerialDiscovery)(nil)
+var _ = device.SerialPort{}
+var _ = diagnostic.Diagnostic{}
+
+func reviewTestSetup(t *testing.T)(*Registry,*reviewFiles,*reviewCLI){
+ t.Helper()
+ r:=NewRegistry()
+ files:=&reviewFiles{data:map[string]string{"main.ino":"before"}}
+ cli:=&reviewCLI{result:build.Result{ID:"build-1",Status:build.StatusPassed,ExitCode:0}}
+ p:=project.Project{ID:"project-1",Name:"lamp",WorkspaceID:"ws",Source:"/workspace/lamp"}
+ if err:=RegisterPatchReviewTools(r,reviewProjectStore{p:p},application.PatchApprovalService{Files:files},application.BuildService{CLI:cli});err!=nil{t.Fatal(err)}
+ return r,files,cli
+}
+func callReviewTool(t *testing.T,r *Registry,name string,args any)map[string]any{
+ t.Helper();raw,err:=json.Marshal(args);if err!=nil{t.Fatal(err)}
+ result,err:=r.Call(context.Background(),name,raw);if err!=nil{t.Fatal(err)}
+ if result.IsError{t.Fatalf("tool %s returned error: %v",name,result.Content)}
+ var value map[string]any
+ if err:=json.Unmarshal([]byte(result.Content[0]["text"].(string)),&value);err!=nil{t.Fatal(err)}
+ return value
+}
+func reviewPatch()repair.Patch{return repair.Patch{ID:"patch-1",Description:"update lamp firmware",Status:repair.StatusProposed,Files:[]repair.FileChange{{Path:"main.ino",Operation:repair.OperationUpdate,Content:"after",ExpectedSHA:repair.ContentSHA("before")}}}}
+func proposeReviewPatch(t *testing.T,r *Registry){
+ t.Helper();v:=callReviewTool(t,r,"luma_repair_patch_propose",map[string]any{"project_id":"project-1","fqbn":"esp32:esp32:esp32","patch":reviewPatch()})
+ if v["status"]!="awaiting_explicit_decision"{t.Fatalf("unexpected proposal status: %#v",v)}
+}
+func TestPatchReviewProposalAndRejectionDoNotWriteOrBuild(t *testing.T){
+ r,files,cli:=reviewTestSetup(t);proposeReviewPatch(t,r)
+ if files.writes!=0||cli.builds!=0||files.data["main.ino"]!="before"{t.Fatal("proposal unexpectedly wrote files or built firmware")}
+ v:=callReviewTool(t,r,"luma_repair_patch_decide",map[string]any{"patch_id":"patch-1","approved":false})
+ if v["status"]!="rejected"{t.Fatalf("unexpected decision: %#v",v)}
+ if files.writes!=0||cli.builds!=0||files.data["main.ino"]!="before"{t.Fatal("rejection wrote files or built firmware")}
+}
+func TestPatchReviewApprovalWritesThenBuilds(t *testing.T){
+ r,files,cli:=reviewTestSetup(t);proposeReviewPatch(t,r)
+ v:=callReviewTool(t,r,"luma_repair_patch_decide",map[string]any{"patch_id":"patch-1","approved":true})
+ if v["status"]!="approved_and_applied"{t.Fatalf("unexpected decision: %#v",v)}
+ if files.writes!=1||files.data["main.ino"]!="after"{t.Fatalf("approved patch not applied: %#v",files.data)}
+ if cli.builds!=1{t.Fatalf("expected one post-approval build, got %d",cli.builds)}
+}
+func TestPatchReviewRejectsStaleProposalWithoutBuild(t *testing.T){
+ r,files,cli:=reviewTestSetup(t);proposeReviewPatch(t,r)
+ files.data["main.ino"]="changed"
+ result,err:=r.Call(context.Background(),"luma_repair_patch_decide",mustJSON(map[string]any{"patch_id":"patch-1","approved":true}))
+ if err!=nil{t.Fatal(err)}
+ if !result.IsError{t.Fatal("expected stale proposal to be rejected")}
+ if cli.builds!=0||files.writes!=0||files.data["main.ino"]!="changed"{t.Fatal("stale proposal wrote files or triggered a build")}
+}
+func mustJSON(v any)json.RawMessage{b,_:=json.Marshal(v);return b}
