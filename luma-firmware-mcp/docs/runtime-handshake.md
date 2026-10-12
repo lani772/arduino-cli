@@ -237,3 +237,10 @@ Unit tests have been added for exact matches, each mismatch category, malformed 
 The firmware specification validator now reuses the ESP32 target assessment for exact known-profile constraints after its structural checks. For the classic `esp32:esp32:esp32` profile, input-only GPIOs 34–39 are rejected for both lamp and status outputs, and the existing flash-reserved pin checks remain enforced. Boot-strapping and UART0 pin concerns remain warnings in the dedicated target assessment rather than silent assumptions.
 
 Unknown ESP32 FQBNs are not assigned the classic board's pin map. They still receive structural/range/duplicate checks, but require board-specific review; a successful generic specification validation is not proof that the selected variant supports the pins. Regression tests were added for input-only lamp pins, input-only status pin, and unknown-variant behavior. Tests have not been executed in this environment.
+
+
+## Simulator protocol regression suite (Task 37)
+
+Added a hardware-free simulated firmware endpoint that accepts the protocol-v1 identify request and emits an identity response. Its deterministic modes cover successful fresh-challenge exchange, stale/wrong challenge, malformed response, disconnect during request write, and response timeout. Each test asserts source cleanup. The simulator does not open a serial port, toggle GPIO, prove board identity, or replace testing against the actual firmware implementation.
+
+Acceptance gate remains unchanged: execute the Go tests and race detector successfully before enabling a concrete serial adapter. These newly added tests have been committed but have not been executed in this environment.
