@@ -36,3 +36,10 @@ This is an application API, not yet an MCP approval UI/tool. A future transport 
 The repair loop performs one baseline compilation and may return one validated repair proposal when structured compiler errors are available. It does not retry builds, restore files, or persist proposed changes. Malformed patches, stale expected hashes, AI failures, and cancelled contexts return errors without writing project source. The caller must obtain explicit approval and invoke the patch-approval service; a later compile is a separate operation after that approved persistence succeeds.
 
 The filesystem adapter's `Replace` operation must provide atomic replacement. If persistence fails, the approval service returns the error; guarantees about the on-disk state depend on that adapter contract.
+
+
+## MCP patch review workflow (Task 42)
+
+The MCP package provides `RegisterPatchReviewTools`, which registers `luma_repair_patch_propose` and `luma_repair_patch_decide`. Proposals are validated against the current project snapshot and held in an in-memory review registry. Proposal submission and rejection do not write files or compile. Explicit approval rechecks the expected content hashes through `PatchApprovalService`, persists the approved patch, and only then invokes a separate build. Failed persistence returns an error and leaves the proposal available for retry.
+
+The review registry is process-local and is lost on restart. The current command-line server does not yet register these tools because it does not construct a persistent project store or a production `ProjectFiles` adapter. Production wiring must first provide an explicitly configured, workspace-confined filesystem adapter with atomic replacement semantics and durable project storage; arbitrary client-supplied filesystem paths must not be trusted.
