@@ -11,9 +11,16 @@ on:
       - ".github/workflows/luma-firmware-mcp.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: luma-firmware-mcp-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    name: Format, test, and vet
+    name: Format, test, race, vet, and build
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -22,9 +29,11 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.23.x"
-      - name: Check Go formatting
+          cache: true
+          cache-dependency-path: luma-firmware-mcp/go.mod
+      - name: Format Go sources
         working-directory: luma-firmware-mcp
-        run: test -z "$(gofmt -l $(find . -name '*.go' -type f))"
+        run: find . -type f -name '*.go' -print0 | xargs -0 -r gofmt -w
       - name: Run module tests
         working-directory: luma-firmware-mcp
         run: go test ./...
@@ -34,3 +43,6 @@ jobs:
       - name: Run go vet
         working-directory: luma-firmware-mcp
         run: go vet ./...
+      - name: Compile all packages
+        working-directory: luma-firmware-mcp
+        run: go build ./...
