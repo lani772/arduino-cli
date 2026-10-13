@@ -20,6 +20,7 @@ func TestProposalAndDecisionSurviveRestart(t *testing.T) {
  again,err:=New(path);if err!=nil{t.Fatal(err)}
  state:=again.Snapshot()
  if state.Decisions["patch-1"]!="rejected"||len(state.Proposals)!=0||len(state.Audit)!=3{t.Fatalf("decision/audit not restored: %+v",state)}
+	if got:=state.Audit[len(state.Audit)-1].ProjectID;got!="p1"{t.Fatalf("final decision audit lost project identity: %q",got)}
  if _,err:=again.BeginDecision("patch-1","approved");err==nil{t.Fatal("duplicate decision must be rejected")}
  if err:=again.SaveProposal("patch-1",p);err==nil{t.Fatal("decided patch id must not be reused")}
 }
