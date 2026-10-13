@@ -75,3 +75,10 @@ go run ./cmd/server -transport stdio
 ```
 
 Register an existing project using `luma_project_register` with a stable `project_id`, a display `name`, and a `source_path` relative to the workspace (or an absolute path inside it). Then use `luma_repair_patch_propose` and review the returned changes before calling `luma_repair_patch_decide` with an explicit decision. The project metadata store is JSON-backed and uses staged file replacement. Do not expose a workspace shared with untrusted local processes; path validation does not eliminate local filesystem race attacks. Pending patch proposals remain in memory and are not restored after restart (tracked as Task 45).
+
+
+## Durable patch review and audit journal (Task 45)
+
+When stdio mode is configured with `LUMA_WORKSPACE_ROOT`, pending repair proposals, in-progress/final decisions, and audit events are persisted to `<workspace>/.luma/patch-review.json` by default. Set `LUMA_REVIEW_JOURNAL` to choose a different path inside the same workspace. The journal uses a private file mode and staged JSON replacement. Proposals are restored when the server starts; a patch ID cannot be proposed again after a recorded decision. Rejection never writes source files. Approval records a processing state before source changes and records the final outcome afterward.
+
+Audit events record proposal, decision start, final outcome, and restoration after failed application. The actor is currently a fixed service label (`mcp-client` or `system`), not an authenticated user identity. This is a local single-process journal, not a multi-instance transactional database. A crash during approval may leave a decision marked `processing`; reconcile source/build state before taking manual action. Tests have been added but not run in this environment.
