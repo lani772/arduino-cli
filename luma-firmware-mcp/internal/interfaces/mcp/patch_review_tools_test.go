@@ -4,6 +4,7 @@ import (
  "context"
  "encoding/json"
  "errors"
+	"path/filepath"
  "testing"
 
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/application"
@@ -12,6 +13,7 @@ import (
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/library"
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/project"
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/repair"
+	"github.com/lani772/arduino-cli/luma-firmware-mcp/internal/infrastructure/reviewstore"
 )
 
 type reviewProjectStore struct { p project.Project }
@@ -54,6 +56,25 @@ func proposeReviewPatch(t *testing.T,r *Registry){
  t.Helper();v:=callReviewTool(t,r,"luma_repair_patch_propose",map[string]any{"project_id":"project-1","fqbn":"esp32:esp32:esp32","patch":reviewPatch()})
  if v["status"]!="awaiting_explicit_decision"{t.Fatalf("unexpected proposal status: %#v",v)}
 }
+func TestPatchReviewRestoresPendingProposalAfterRestart(t *testing.T) {
+ t.Helper()
+ path:=filepath.Join(t.TempDir(),"review.json")
+ journal,err:=reviewstore.New(path);if err!=nil{t.Fatal(err)}
+ r:=NewRegistry()
+ files:=&reviewFiles{data:map[string]string{"main.ino":"before"}}
+ cli:=&reviewCLI{result:build.Result{ID:"build-1",Status:build.StatusPassed,ExitCode:0}}
+ p:=project.Project{ID:"project-1",Name:"lamp",WorkspaceID:"ws",Source:"/workspace/lamp"}
+ if err:=RegisterPatchReviewToolsWithJournal(r,reviewProjectStore{p:p},application.PatchApprovalService{Files:files},application.BuildService{CLI:cli},journal);err!=nil{t.Fatal(err)}
+ proposeReviewPatch(t,r)
+
+ reloadedJournal,err:=reviewstore.New(path);if err!=nil{t.Fatal(err)}
+ restarted:=NewRegistry()
+ if err:=RegisterPatchReviewToolsWithJournal(restarted,reviewProjectStore{p:p},application.PatchApprovalService{Files:files},application.BuildService{CLI:cli},reloadedJournal);err!=nil{t.Fatal(err)}
+ v:=callReviewTool(t,restarted,"luma_repair_patch_decide",map[string]any{"patch_id":"patch-1","approved":false})
+ if v["status"]!="rejected"{t.Fatalf("persisted proposal was not available after restart: %#v",v)}
+ if files.writes!=0||cli.builds!=0||files.data["main.ino"]!="before"{t.Fatal("restored rejection caused side effects")}
+}
+
 func TestPatchReviewRequiresExplicitDecision(t *testing.T) {
  r,files,cli:=reviewTestSetup(t)
  proposeReviewPatch(t,r)
