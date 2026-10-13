@@ -54,6 +54,17 @@ func proposeReviewPatch(t *testing.T,r *Registry){
  t.Helper();v:=callReviewTool(t,r,"luma_repair_patch_propose",map[string]any{"project_id":"project-1","fqbn":"esp32:esp32:esp32","patch":reviewPatch()})
  if v["status"]!="awaiting_explicit_decision"{t.Fatalf("unexpected proposal status: %#v",v)}
 }
+func TestPatchReviewRequiresExplicitDecision(t *testing.T) {
+ r,files,cli:=reviewTestSetup(t)
+ proposeReviewPatch(t,r)
+ result,err:=r.Call(context.Background(),"luma_repair_patch_decide",mustJSON(map[string]any{"patch_id":"patch-1"}))
+ if err!=nil{t.Fatal(err)}
+ if !result.IsError{t.Fatal("missing approved field must not be treated as an explicit rejection")}
+ if files.writes!=0||cli.builds!=0||files.data["main.ino"]!="before"{t.Fatal("missing decision caused side effects")}
+ v:=callReviewTool(t,r,"luma_repair_patch_decide",map[string]any{"patch_id":"patch-1","approved":false})
+ if v["status"]!="rejected"{t.Fatalf("proposal should remain pending for explicit decision: %#v",v)}
+}
+
 func TestPatchReviewProposalAndRejectionDoNotWriteOrBuild(t *testing.T){
  r,files,cli:=reviewTestSetup(t);proposeReviewPatch(t,r)
  if files.writes!=0||cli.builds!=0||files.data["main.ino"]!="before"{t.Fatal("proposal unexpectedly wrote files or built firmware")}
