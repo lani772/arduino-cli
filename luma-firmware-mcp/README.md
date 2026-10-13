@@ -60,4 +60,18 @@ See [supported boards and GPIO constraints](docs/supported-boards.md) for the ex
 
 The MCP package includes a review-first patch workflow through `RegisterPatchReviewTools`: `luma_repair_patch_propose` validates a candidate against a fresh source snapshot without writing, and `luma_repair_patch_decide` rejects it without side effects or applies it after explicit approval and then compiles. This registration API is covered by tests in `internal/interfaces/mcp/patch_review_tools_test.go`.
 
-These tools are not yet exposed by the default server entry point. Persistent project storage and a workspace-confined, atomic filesystem adapter must be configured before runtime registration; the current server intentionally does not accept arbitrary filesystem paths for repair writes.
+These tools are registered by the stdio server only when `LUMA_WORKSPACE_ROOT` points to an existing, trusted workspace directory. Project metadata is persisted to `LUMA_PROJECTS_FILE` when set (the path must be inside the workspace); otherwise it defaults to `<workspace>/.luma/projects.json`. The server registers `luma_project_register`, `luma_repair_patch_propose`, and `luma_repair_patch_decide`. Project registration accepts only existing directories under the configured workspace. If `LUMA_WORKSPACE_ROOT` is unset, patch-review and project-registration tools remain disabled.
+
+
+## Secure patch-review runtime configuration (Task 44)
+
+Create a dedicated workspace directory and start the MCP stdio transport with the workspace explicitly configured:
+
+```bash
+export LUMA_WORKSPACE_ROOT="/absolute/path/to/luma-workspace"
+# Optional; must remain inside LUMA_WORKSPACE_ROOT:
+export LUMA_PROJECTS_FILE="$LUMA_WORKSPACE_ROOT/.luma/projects.json"
+go run ./cmd/server -transport stdio
+```
+
+Register an existing project using `luma_project_register` with a stable `project_id`, a display `name`, and a `source_path` relative to the workspace (or an absolute path inside it). Then use `luma_repair_patch_propose` and review the returned changes before calling `luma_repair_patch_decide` with an explicit decision. The project metadata store is JSON-backed and uses staged file replacement. Do not expose a workspace shared with untrusted local processes; path validation does not eliminate local filesystem race attacks. Pending patch proposals remain in memory and are not restored after restart (tracked as Task 45).
