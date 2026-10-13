@@ -3,7 +3,8 @@ package main
 import (
 	"context"
 	"flag"
-	"log"\n "path/filepath"
+	"log"
+	"path/filepath"
 	"os"
 	"strings"
 
@@ -11,7 +12,7 @@ import (
 	"github.com/lani772/arduino-cli/luma-firmware-mcp/internal/infrastructure/arduino"
 	"github.com/lani772/arduino-cli/luma-firmware-mcp/internal/infrastructure/filedb"
 	workspacefs "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/infrastructure/filesystem"
- "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/infrastructure/reviewstore"
+ 	"github.com/lani772/arduino-cli/luma-firmware-mcp/internal/infrastructure/reviewstore"
 	"github.com/lani772/arduino-cli/luma-firmware-mcp/internal/interfaces/httpserver"
 	"github.com/lani772/arduino-cli/luma-firmware-mcp/internal/interfaces/mcp"
 	"github.com/lani772/arduino-cli/luma-firmware-mcp/internal/policy"
@@ -46,7 +47,15 @@ func main() {
 			projects, err := filedb.NewProjectStore(files.Root, os.Getenv("LUMA_PROJECTS_FILE"))
 			if err != nil { logger.Fatalf("configure persistent project store: %v", err) }
 			if err := mcp.RegisterProjectTools(server.Registry, projects); err != nil { logger.Fatal(err) }
-			journalPath := strings.TrimSpace(os.Getenv("LUMA_REVIEW_JOURNAL"))\n            if journalPath == "" { journalPath = filepath.Join(files.Root, ".luma", "patch-review.json") }\n            journalAbs, err := filepath.Abs(journalPath)\n            if err != nil { logger.Fatalf("resolve patch review journal path: %v", err) }\n            journalRel, err := filepath.Rel(files.Root, journalAbs)\n            if err != nil || journalRel == "." || journalRel == ".." || strings.HasPrefix(journalRel, ".."+string(filepath.Separator)) { logger.Fatal("LUMA_REVIEW_JOURNAL must be inside LUMA_WORKSPACE_ROOT") }\n            journal, err := reviewstore.New(journalAbs)\n            if err != nil { logger.Fatalf("configure patch review journal: %v", err) }\n            if err := mcp.RegisterPatchReviewToolsWithJournal(server.Registry, projects, application.PatchApprovalService{Files:files}, application.BuildService{CLI:cli}, journal); err != nil { logger.Fatal(err) }
+			journalPath := strings.TrimSpace(os.Getenv("LUMA_REVIEW_JOURNAL"))
+            if journalPath == "" { journalPath = filepath.Join(files.Root, ".luma", "patch-review.json") }
+            journalAbs, err := filepath.Abs(journalPath)
+            if err != nil { logger.Fatalf("resolve patch review journal path: %v", err) }
+            journalRel, err := filepath.Rel(files.Root, journalAbs)
+            if err != nil || journalRel == "." || journalRel == ".." || strings.HasPrefix(journalRel, ".."+string(filepath.Separator)) { logger.Fatal("LUMA_REVIEW_JOURNAL must be inside LUMA_WORKSPACE_ROOT") }
+            journal, err := reviewstore.New(journalAbs)
+            if err != nil { logger.Fatalf("configure patch review journal: %v", err) }
+            if err := mcp.RegisterPatchReviewToolsWithJournal(server.Registry, projects, application.PatchApprovalService{Files:files}, application.BuildService{CLI:cli}, journal); err != nil { logger.Fatal(err) }
 			logger.Printf("workspace-confined project and patch-review tools enabled root=%s", files.Root)
 		}
 		logger.Printf("version=%s transport=stdio tools=%d resources=%d prompts=%d status=ready", version, len(server.Registry.List()), len(server.Resources.List()), len(server.Prompts.List()))
