@@ -80,6 +80,10 @@ func (s *ProjectStore) resolveSource(source string, mustExist bool) (string, err
 	if strings.TrimSpace(source) == "" { return "", fmt.Errorf("project source is required") }
 	if !filepath.IsAbs(source) { source = filepath.Join(s.Root, source) }
 	abs, err := filepath.Abs(source); if err != nil { return "", err }
+	metaRel, metaErr := filepath.Rel(abs, s.MetadataPath)
+	if metaErr == nil && (metaRel == "." || (metaRel != ".." && !strings.HasPrefix(metaRel, ".."+string(filepath.Separator)))) {
+		return "", fmt.Errorf("project source cannot contain the project metadata file")
+	}
 	rel, err := filepath.Rel(s.Root, abs)
 	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("project source must be a child of configured workspace")
