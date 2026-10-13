@@ -34,6 +34,7 @@ func NewProjectStore(root, metadataPath string) (*ProjectStore, error) {
 	if err != nil || parentRel == ".." || strings.HasPrefix(parentRel, ".."+string(filepath.Separator)) {
 		return nil, fmt.Errorf("project metadata file must be inside the configured workspace")
 	}
+	if err := validateMetadataPath(realRoot, metadataPath); err != nil { return nil, err }
 	store := &ProjectStore{Root:realRoot, MetadataPath:metadataPath, items:map[string]project.Project{}}
 	if err := store.load(); err != nil { return nil, err }
 	return store, nil
@@ -111,5 +112,24 @@ func (s *ProjectStore) persistLocked() error {
 	if err := tmp.Sync(); err != nil { tmp.Close(); return err }
 	if err := tmp.Close(); err != nil { return err }
 	if err := os.Rename(tmpName, s.MetadataPath); err != nil { return fmt.Errorf("replace project metadata: %w", err) }
+	return nil
+}
+
+func validateMetadataPath(root, path string) error {
+	rel, err := filepath.Rel(root, path)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("project metadata file must be a child of the configured workspace")
+	}
+	current := root
+	parts := strings.Split(rel, string(filepath.Separator))
+	for i, part := range parts {
+		current = filepath.Join(current, part)
+		info, statErr := os.Lstat(current)
+		if os.IsNotExist(statErr) { break }
+		if statErr != nil { return statErr }
+		if info.Mode()&os.ModeSymlink != 0 { return fmt.Errorf("symlink in project metadata path is not allowed") }
+		if i == len(parts)-1 && !info.Mode().IsRegular() { return fmt.Errorf("project metadata must be a regular file") }
+		if i < len(parts)-1 && !info.IsDir() { return fmt.Errorf("project metadata parent must be a directory") }
+	}
 	return nil
 }
