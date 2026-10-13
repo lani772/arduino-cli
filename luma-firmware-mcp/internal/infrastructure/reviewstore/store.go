@@ -48,7 +48,7 @@ func(s *Store) BeginDecision(id,decision string)(Proposal,error){
 }
 func(s *Store) CompleteDecision(id,decision,detail string)error{
  s.mu.Lock();defer s.mu.Unlock();n:=clone(s.state);if n.Decisions[id]!="processing"{return fmt.Errorf("patch decision is not processing")}
- n.Decisions[id]=decision;n.Audit=append(n.Audit,Event{PatchID:id,Action:decision,Actor:"mcp-client",At:time.Now().UTC(),Detail:detail})
+ n.Decisions[id]=decision;projectID:="";for i:=len(n.Audit)-1;i>=0;i--{if n.Audit[i].PatchID==id{projectID=n.Audit[i].ProjectID;break}};n.Audit=append(n.Audit,Event{PatchID:id,ProjectID:projectID,Action:decision,Actor:"mcp-client",At:time.Now().UTC(),Detail:detail})
  if err:=s.persist(n);err!=nil{return err};s.state=n;return nil
 }
 func(s *Store) RestoreProposal(id string,p Proposal,detail string)error{
