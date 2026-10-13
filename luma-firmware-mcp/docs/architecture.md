@@ -35,14 +35,14 @@ This is an application API, not yet an MCP approval UI/tool. A future transport 
 
 The repair loop performs one baseline compilation and may return one validated repair proposal when structured compiler errors are available. It does not retry builds, restore files, or persist proposed changes. Malformed patches, stale expected hashes, AI failures, and cancelled contexts return errors without writing project source. The caller must obtain explicit approval and invoke the patch-approval service; a later compile is a separate operation after that approved persistence succeeds.
 
-The filesystem adapter's `Replace` operation must provide atomic replacement. If persistence fails, the approval service returns the error; guarantees about the on-disk state depend on that adapter contract.
+The filesystem adapter's `Replace` operation stages the complete source tree and swaps directories, attempting rollback if installation fails. If persistence fails, the approval service returns the error; guarantees about on-disk state depend on the adapter and host filesystem.
 
 
 ## MCP patch review workflow (Task 42)
 
 The MCP package provides `RegisterPatchReviewTools`, which registers `luma_repair_patch_propose` and `luma_repair_patch_decide`. Proposals are validated against the current project snapshot and held in an in-memory review registry. Proposal submission and rejection do not write files or compile. Explicit approval rechecks the expected content hashes through `PatchApprovalService`, persists the approved patch, and only then invokes a separate build. Failed persistence returns an error and leaves the proposal available for retry.
 
-The review registry is process-local and is lost on restart. The current command-line server does not yet register these tools because it does not construct a persistent project store or a production `ProjectFiles` adapter. Production wiring must first provide an explicitly configured, workspace-confined filesystem adapter with atomic replacement semantics and durable project storage; arbitrary client-supplied filesystem paths must not be trusted.
+The review registry is process-local and is lost on restart. Task 44 wires these tools into the stdio server only when `LUMA_WORKSPACE_ROOT` is explicitly configured. A durable JSON-backed project store and the workspace-confined filesystem adapter are constructed at startup; arbitrary client-supplied filesystem paths are not used as the workspace root. Pending proposal persistence remains Task 45.
 
 
 ## Workspace-confined filesystem adapter (Task 43)
@@ -52,3 +52,10 @@ The `internal/infrastructure/filesystem` package implements the application `Pro
 Snapshots return slash-separated relative file names and contents. Symlinks, non-regular files, and symlinked path components are rejected instead of followed. Snapshot and replacement check context cancellation. Replacement stages the complete resulting snapshot in a sibling directory, moves the current project to a backup, then renames the staged directory into place. If installing the stage fails, it attempts to restore the original directory. Replacement preserves the complete map supplied by the application; files absent from that map are removed as part of the directory swap.
 
 Configure the root only from trusted server configuration (for example, a deployment environment variable); never derive it from an MCP tool argument. The adapter does not make a hostile, concurrently writable workspace safe against local filesystem races: the service account should exclusively control the workspace tree. Directory rename atomicity and crash durability depend on the host filesystem. The adapter is not yet wired into the default server entry point; runtime registration and durable project storage remain Task 44. Tests were added for snapshots, replacement, traversal, symlinks, and cancellation, but have not been executed in this environment.
+
+
+## Persistent project metadata and runtime wiring (Task 44)
+
+The stdio server enables patch review only when `LUMA_WORKSPACE_ROOT` points to an explicitly configured, existing directory. The JSON-backed `internal/infrastructure/filedb.ProjectStore` persists project metadata using a temporary file, sync, and rename. By default, metadata is stored at `<workspace>/.luma/projects.json`; `LUMA_PROJECTS_FILE` may override the path only within the workspace. Metadata paths and project source paths reject symlinks, and project source directories must be children of the configured root.
+
+The server registers `luma_project_register`, `luma_repair_patch_propose`, and `luma_repair_patch_decide` when the workspace configuration is valid. If no workspace root is configured, these tools stay disabled and the other MCP tools remain available. Registration records only existing project directories; it does not modify or compile them. The build runs only after explicit patch approval and successful patch persistence. This configuration does not yet make pending repair proposals durable, and local filesystem races remain out of scope; keep the workspace writable only by the service account. Tests have been added but have not been executed in this environment.
