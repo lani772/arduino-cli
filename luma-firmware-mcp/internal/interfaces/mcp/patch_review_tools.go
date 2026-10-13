@@ -120,15 +120,16 @@ func RegisterPatchReviewToolsWithJournal(r *Registry, projects application.Proje
 		Handler:func(ctx context.Context,raw json.RawMessage)(any,error){
 			var args struct {
 				PatchID string `json:"patch_id"`
-				Approved bool `json:"approved"`
+				Approved *bool `json:"approved"`
 			}
 			if err:=json.Unmarshal(raw,&args);err!=nil{return nil,fmt.Errorf("invalid decision arguments: %w",err)}
 			args.PatchID=strings.TrimSpace(args.PatchID)
 			if args.PatchID==""{return nil,fmt.Errorf("patch_id is required")}
+			if args.Approved==nil{return nil,fmt.Errorf("approved must be explicitly true or false")}
 			state.mu.Lock()
 			proposal,ok:=state.pending[args.PatchID]
 			if !ok {state.mu.Unlock();return nil,fmt.Errorf("pending patch not found")}
-			if !args.Approved {
+			if !*args.Approved {
 				if state.journal!=nil {
 					if _,err:=state.journal.BeginDecision(args.PatchID,"rejected");err!=nil{state.mu.Unlock();return nil,err}
 					if err:=state.journal.CompleteDecision(args.PatchID,"rejected","");err!=nil{state.mu.Unlock();return nil,err}
