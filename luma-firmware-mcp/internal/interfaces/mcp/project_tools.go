@@ -34,7 +34,9 @@ func RegisterProjectTools(r *Registry, projects application.ProjectStore) error 
 			if args.ID == "" || args.Name == "" || args.Source == "" { return nil, fmt.Errorf("project_id, name, and source_path are required") }
 			p := project.Project{ID:args.ID, Name:args.Name, WorkspaceID:"default", Source:args.Source}
 			if err := projects.Create(ctx, p); err != nil { return nil, fmt.Errorf("register project: %w", err) }
-			return map[string]any{"status":"registered","project_id":p.ID,"name":p.Name,"source_path":p.Source,"workspace_id":p.WorkspaceID,"files_modified":false,"build_triggered":false}, nil
+			stored, err := projects.Get(ctx, p.ID)
+			if err != nil { return nil, fmt.Errorf("reload registered project: %w", err) }
+			return map[string]any{"status":"registered","project_id":stored.ID,"name":stored.Name,"source_path":stored.Source,"workspace_id":stored.WorkspaceID,"files_modified":false,"build_triggered":false}, nil
 		},
 	})
 }
