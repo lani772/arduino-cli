@@ -10,6 +10,7 @@ import (
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/application"
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/project"
  "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/domain/repair"
+ "github.com/lani772/arduino-cli/luma-firmware-mcp/internal/infrastructure/reviewstore"
 )
 
 type pendingPatch struct {
@@ -17,6 +18,8 @@ type pendingPatch struct {
  FQBN string
  Patch repair.Patch
 }
+
+type ReviewJournal interface { Snapshot() reviewstore.State; SaveProposal(string, reviewstore.Proposal) error; BeginDecision(string, string) (reviewstore.Proposal, error); CompleteDecision(string, string, string) error; RestoreProposal(string, reviewstore.Proposal, string) error }
 
 type patchReviewRegistry struct {
  mu sync.Mutex
@@ -31,11 +34,13 @@ func newPatchReviewRegistry() *patchReviewRegistry {
 // RegisterPatchReviewTools exposes a review-first workflow. A proposal is validated
 // against the current snapshot, then held in memory until explicitly approved/rejected.
 // Approval persists the patch before triggering a separate compilation.
-func RegisterPatchReviewTools(r *Registry, projects application.ProjectStore, approvals application.PatchApprovalService, builder application.BuildService) error {
+func RegisterPatchReviewTools(r *Registry, projects application.ProjectStore, approvals application.PatchApprovalService, builder application.BuildService) error { return RegisterPatchReviewToolsWithJournal(r, projects, approvals, builder, nil) }
+
+func RegisterPatchReviewToolsWithJournal(r *Registry, projects application.ProjectStore, approvals application.PatchApprovalService, builder application.BuildService, journal ReviewJournal) error {
  if r == nil || projects == nil || approvals.Files == nil || builder.CLI == nil {
   return fmt.Errorf("registry, project store, patch approval files, and build service are required")
  }
- state := newPatchReviewRegistry()
+ state := newPatchReviewRegistry()\n state.journal = journal\n if journal != nil { saved := journal.Snapshot(); for id, p := range saved.Proposals { state.pending[id] = pendingPatch{Project:p.Project,FQBN:p.FQBN,Patch:p.Patch} }; for id, decision := range saved.Decisions { state.decided[id] = decision } }
  patchSchema := map[string]any{
   "type":"object",
   "properties":map[string]any{
