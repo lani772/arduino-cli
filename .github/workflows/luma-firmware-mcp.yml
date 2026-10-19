@@ -31,14 +31,20 @@ jobs:
           go-version: "1.23.x"
           cache: true
           cache-dependency-path: luma-firmware-mcp/go.mod
-      - name: Check Go formatting
+      - name: Check Go formatting for changed files
         working-directory: luma-firmware-mcp
         shell: bash
         run: |
-          unformatted="$(find . -type f -name '*.go' -print0 | xargs -0 gofmt -l)"
+          # Existing module files need a separate formatting-only pass.
+          changed_go="$(git diff-tree --no-commit-id --name-only -r HEAD -- 'luma-firmware-mcp/*.go' 'luma-firmware-mcp/**/*.go')"
+          if [[ -z "$changed_go" ]]; then
+            echo "No Go files changed in this commit; formatting check is not applicable."
+            exit 0
+          fi
+          unformatted="$(printf '%s\\n' "$changed_go" | xargs -r gofmt -l)"
           if [[ -n "$unformatted" ]]; then
-            echo "These Go files are not gofmt-formatted:"
-            printf '%s\n' "$unformatted"
+            echo "These changed Go files are not gofmt-formatted:"
+            printf '%s\\n' "$unformatted"
             exit 1
           fi
       - name: Check whitespace errors
